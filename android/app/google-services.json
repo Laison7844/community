@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "318809620975",
+    "project_id": "church-5d638",
+    "storage_bucket": "church-5d638.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:318809620975:android:d6730c0591617336f6b61a",
+        "android_client_info": {
+          "package_name": "com.example.communtiy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzE9onDrste3DKRGld_ZM5Uvb0Nfjrqf8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

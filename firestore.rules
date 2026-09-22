@@ -1,0 +1,231 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the caller matches the document owner UID
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if caller has authorized staff role (admin, committee, pastor)
+    // Checks both Firebase Custom Claims token and verified Firestore member profile
+    function isStaff() {
+      return isAuthenticated() && (
+        request.auth.token.role in ['admin', 'committee', 'pastor'] ||
+        request.auth.token.admin == true ||
+        (exists(/databases/$(database)/documents/member_profiles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.role in ['admin', 'committee', 'pastor'] &&
+         get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.status == 'approved')
+      );
+    }
+
+    // Check if caller is an active, approved church member
+    function isApprovedMember() {
+      return isAuthenticated() && (
+        request.auth.token.status == 'approved' ||
+        (exists(/databases/$(database)/documents/member_profiles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.status == 'approved')
+      );
+    }
+
+    // Validates that the profileImageUrl conforms to an authentic HTTPS Storage URL
+    function isValidProfileImageUrl(userId) {
+      let url = request.resource.data.profileImageUrl;
+      return url is string && url.size() >= 15 && url.size() <= 1000
+        && url.matches('^https://firebasestorage\\.googleapis\\.com/.*member_profiles.*' + userId + '.*');
+    }
+
+    // Default deny-all fallback for any unmatched collection
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Member Profiles Collection: member_profiles/{userId}
+    // ===============================================================
+    match /member_profiles/{userId} {
+      // 1. Read rule:
+      // A user can read their own profile document.
+      // Authorized staff (admin, committee, pastor) can read applicant and member profiles.
+      allow read: if isOwner(userId) || isStaff();
+
+      // 2. Creation rule:
+      // A new user can create ONLY their own profile document.
+      // - Must enforce status == 'pending', role == 'member', churchId == 'csi_main'.
+      // - Mandatory official fullName, shared familyNumber, and profileImageUrl.
+      // - profileImageUrl must match the Storage path for this userId.
+      // - Users cannot approve themselves or assign admin roles.
+      // - Strictly allowed keys only; unexpected extra fields are rejected.
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.status == 'pending'
+        && request.resource.data.role == 'member'
+        && request.resource.data.churchId == 'csi_main'
+        && request.resource.data.keys().hasOnly(['uid', 'fullName', 'familyNumber', 'profileImageUrl', 'email', 'phone', 'familyInfo', 'status', 'role', 'churchId', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['uid', 'fullName', 'familyNumber', 'profileImageUrl', 'email', 'status', 'role', 'churchId', 'createdAt', 'updatedAt'])
+        && request.resource.data.fullName is string && request.resource.data.fullName.size() >= 2 && request.resource.data.fullName.size() <= 100
+        && request.resource.data.familyNumber is string && request.resource.data.familyNumber.size() >= 1 && request.resource.data.familyNumber.size() <= 30
+        && isValidProfileImageUrl(userId)
+        && request.resource.data.email is string && request.resource.data.email.size() >= 5 && request.resource.data.email.size() <= 100
+        && (request.resource.data.phone == null || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20))
+        && (request.resource.data.familyInfo == null || (request.resource.data.familyInfo is string && request.resource.data.familyInfo.size() <= 200))
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      // 3. Update rule:
+      // Case A: Users can modify ONLY personal details:
+      //   fullName, phone, familyInfo, profileImageUrl, updatedAt
+      //   STRICTLY FORBIDDEN FOR USERS:
+      //   Cannot modify familyNumber, uid, email, status, role, churchId, or createdAt.
+      // Case B: Authorized staff updating approval status:
+      //   Staff cannot modify their own profile (self-approval prohibited: request.auth.uid != userId).
+      //   Only 'status' and 'updatedAt' can be modified.
+      //   All other fields (uid, email, fullName, familyNumber, role, churchId, createdAt, profileImageUrl) must remain unchanged.
+      allow update: if
+        (
+          isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'familyInfo', 'profileImageUrl', 'updatedAt'])
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.familyNumber == resource.data.familyNumber
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.churchId == resource.data.churchId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.fullName is string && request.resource.data.fullName.size() >= 2 && request.resource.data.fullName.size() <= 100
+          && isValidProfileImageUrl(userId)
+          && (request.resource.data.phone == null || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20))
+          && (request.resource.data.familyInfo == null || (request.resource.data.familyInfo is string && request.resource.data.familyInfo.size() <= 200))
+          && request.resource.data.updatedAt is timestamp
+        )
+        ||
+        (
+          isStaff()
+          && request.auth.uid != userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.fullName == resource.data.fullName
+          && request.resource.data.familyNumber == resource.data.familyNumber
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.churchId == resource.data.churchId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.profileImageUrl == resource.data.profileImageUrl
+          && request.resource.data.status in ['pending', 'approved', 'suspended', 'rejected']
+          && request.resource.data.updatedAt is timestamp
+        );
+
+      // 4. Deletion rule:
+      // Strictly forbidden for client SDKs.
+      allow delete: if false;
+    }
+
+    // ===============================================================
+    // Verification Audit Logs: verification_audit_logs/{logId}
+    // ===============================================================
+    match /verification_audit_logs/{logId} {
+      // 1. Read rule:
+      // Only authorized staff can view verification audit records.
+      allow read: if isStaff();
+
+      // 2. Create rule:
+      // Authorized staff can create audit records when executing verification actions.
+      // Must validate all required schema fields and performedByUid match.
+      allow create: if isStaff()
+        && request.resource.data.keys().hasOnly(['id', 'targetUid', 'targetFullName', 'targetFamilyNumber', 'previousStatus', 'newStatus', 'action', 'reason', 'performedByUid', 'performedByRole', 'timestamp'])
+        && request.resource.data.keys().hasAll(['id', 'targetUid', 'targetFullName', 'targetFamilyNumber', 'previousStatus', 'newStatus', 'action', 'reason', 'performedByUid', 'performedByRole', 'timestamp'])
+        && request.resource.data.id == logId
+        && request.resource.data.performedByUid == request.auth.uid
+        && request.resource.data.targetUid is string && request.resource.data.targetUid.size() >= 1
+        && request.resource.data.targetFullName is string && request.resource.data.targetFullName.size() >= 1
+        && request.resource.data.targetFamilyNumber is string && request.resource.data.targetFamilyNumber.size() >= 1
+        && request.resource.data.previousStatus in ['pending', 'approved', 'suspended', 'rejected']
+        && request.resource.data.newStatus in ['pending', 'approved', 'suspended', 'rejected']
+        && request.resource.data.action in ['approve', 'reject', 'suspend', 'restore', 'reconsider']
+        && request.resource.data.reason is string && request.resource.data.reason.size() >= 1 && request.resource.data.reason.size() <= 500
+        && request.resource.data.performedByRole in ['admin', 'committee', 'pastor']
+        && request.resource.data.timestamp is timestamp;
+
+      // 3. Update & Delete rule:
+      // Strictly forbidden: Audit logs are append-only and tamper-proof.
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // Announcements Collection: announcements/{announcementId}
+    // ===============================================================
+    match /announcements/{announcementId} {
+      // Approved members can read published announcements; staff can read all (including drafts)
+      allow read: if (isApprovedMember() && resource.data.isPublished == true) || isStaff();
+
+      // Only authorized staff can create announcements
+      allow create: if isStaff()
+        && request.resource.data.keys().hasOnly(['id', 'title', 'description', 'imageUrl', 'priority', 'isPublished', 'churchId', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['id', 'title', 'description', 'priority', 'isPublished', 'churchId', 'createdBy', 'createdAt', 'updatedAt'])
+        && request.resource.data.id == announcementId
+        && request.resource.data.churchId == 'csi_main'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.title is string && request.resource.data.title.size() >= 3 && request.resource.data.title.size() <= 150
+        && request.resource.data.description is string && request.resource.data.description.size() >= 5 && request.resource.data.description.size() <= 5000
+        && request.resource.data.priority in ['normal', 'high', 'urgent']
+        && request.resource.data.isPublished is bool
+        && (request.resource.data.imageUrl == null || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 1000))
+        && (request.resource.data.createdByName == null || (request.resource.data.createdByName is string && request.resource.data.createdByName.size() <= 100))
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      // Only authorized staff can update announcements (locks churchId, createdBy, createdAt)
+      allow update: if isStaff()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'imageUrl', 'priority', 'isPublished', 'createdByName', 'updatedAt'])
+        && request.resource.data.churchId == resource.data.churchId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.title is string && request.resource.data.title.size() >= 3 && request.resource.data.title.size() <= 150
+        && request.resource.data.description is string && request.resource.data.description.size() >= 5 && request.resource.data.description.size() <= 5000
+        && request.resource.data.priority in ['normal', 'high', 'urgent']
+        && request.resource.data.isPublished is bool
+        && (request.resource.data.imageUrl == null || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 1000))
+        && (request.resource.data.createdByName == null || (request.resource.data.createdByName is string && request.resource.data.createdByName.size() <= 100))
+        && request.resource.data.updatedAt is timestamp;
+
+      // Only authorized staff can delete announcements
+      allow delete: if isStaff();
+    }
+
+    // ===============================================================
+    // Announcement Audit Logs: announcement_audit_logs/{logId}
+    // ===============================================================
+    match /announcement_audit_logs/{logId} {
+      // Only authorized staff can view announcement audit records
+      allow read: if isStaff();
+
+      // Authorized staff can create audit records when executing announcement actions
+      // Enforces performedByUid match and binds performedByRole to current Firestore profile role
+      allow create: if isStaff()
+        && request.resource.data.keys().hasOnly(['id', 'announcementId', 'announcementTitle', 'action', 'performedByUid', 'performedByRole', 'reason', 'timestamp'])
+        && request.resource.data.keys().hasAll(['id', 'announcementId', 'announcementTitle', 'action', 'performedByUid', 'performedByRole', 'timestamp'])
+        && request.resource.data.id == logId
+        && request.resource.data.performedByUid == request.auth.uid
+        && exists(/databases/$(database)/documents/member_profiles/$(request.auth.uid))
+        && request.resource.data.performedByRole == get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.role
+        && request.resource.data.announcementId is string && request.resource.data.announcementId.size() >= 1
+        && request.resource.data.announcementTitle is string && request.resource.data.announcementTitle.size() >= 1
+        && request.resource.data.action in ['create', 'edit', 'publish', 'unpublish', 'delete']
+        && (request.resource.data.reason == null || (request.resource.data.reason is string && request.resource.data.reason.size() <= 500))
+        && request.resource.data.timestamp is timestamp;
+
+      // Immutable and append-only
+      allow update, delete: if false;
+    }
+  }
+}

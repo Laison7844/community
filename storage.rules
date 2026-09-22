@@ -1,0 +1,72 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Default deny all unmatched paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Checks if caller has authorized committee, pastor, or admin privileges
+    function isAuthorizedStaff() {
+      return isAuthenticated() && (
+        request.auth.token.role in ['admin', 'committee', 'pastor'] ||
+        request.auth.token.admin == true ||
+        (firestore.exists(/databases/(default)/documents/member_profiles/$(request.auth.uid)) &&
+         firestore.get(/databases/(default)/documents/member_profiles/$(request.auth.uid)).data.role in ['admin', 'committee', 'pastor'] &&
+         firestore.get(/databases/(default)/documents/member_profiles/$(request.auth.uid)).data.status == 'approved')
+      );
+    }
+
+    // Checks if caller is an active, approved church member
+    function isApprovedMember() {
+      return isAuthenticated() && (
+        request.auth.token.status == 'approved' ||
+        (firestore.exists(/databases/(default)/documents/member_profiles/$(request.auth.uid)) &&
+         firestore.get(/databases/(default)/documents/member_profiles/$(request.auth.uid)).data.status == 'approved')
+      );
+    }
+
+    // Member profile photos: member_profiles/{userId}/{photoName}
+    match /member_profiles/{userId}/{photoName} {
+      // Photo reads restricted to the owner and authorized committee/pastor/admin staff.
+      // Ordinary members and unauthenticated users cannot access private applicant photos.
+      allow read: if isOwner(userId) || isAuthorizedStaff();
+
+      // Uploads restricted to the owner's own UID path.
+      // Max size: 5MB; Non-empty; Supported image types only.
+      // Overwriting existing photos is permitted for the authenticated owner.
+      allow write: if isOwner(userId)
+        && request.resource.size > 0
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+
+      allow delete: if isOwner(userId) || isAuthorizedStaff();
+    }
+
+    // Announcement banners: announcements/{announcementId}/{fileName}
+    match /announcements/{announcementId}/{fileName} {
+      // Readable by authenticated approved members and staff
+      allow read: if isApprovedMember() || isAuthorizedStaff();
+
+      // Uploads restricted to staff, maximum 5 MB, supported image MIME types
+      allow write: if isAuthorizedStaff()
+        && request.resource.size > 0
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+
+      // Deletion restricted to authorized staff
+      allow delete: if isAuthorizedStaff();
+    }
+  }
+}
