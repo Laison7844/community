@@ -17,6 +17,9 @@ class AppColors {
   static const Color mutedGoldLight = Color(0xFFDFBF7E);
   static const Color mutedGoldDark = Color(0xFF9E7B35);
 
+  // Liturgical Wine / Rich Burgundy (for wedding anniversaries & celebrations)
+  static const Color accentWine = Color(0xFF8B263E);
+
   // Background & Neutral Surfaces
   static const Color backgroundIvory = Color(0xFFFAF8F5); // Warm Ivory
   static const Color surfaceCream = Color(0xFFF5F0E8);    // Soft Cream

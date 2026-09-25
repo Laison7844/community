@@ -17,11 +17,11 @@ service firebase.storage {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Checks if caller has authorized committee, pastor, or admin privileges
+    // Checks if caller has authorized committee, pastor, or admin privileges and is approved
     function isAuthorizedStaff() {
       return isAuthenticated() && (
-        request.auth.token.role in ['admin', 'committee', 'pastor'] ||
-        request.auth.token.admin == true ||
+        ((request.auth.token.role in ['admin', 'committee', 'pastor'] || request.auth.token.admin == true) &&
+         request.auth.token.status == 'approved') ||
         (firestore.exists(/databases/(default)/documents/member_profiles/$(request.auth.uid)) &&
          firestore.get(/databases/(default)/documents/member_profiles/$(request.auth.uid)).data.role in ['admin', 'committee', 'pastor'] &&
          firestore.get(/databases/(default)/documents/member_profiles/$(request.auth.uid)).data.status == 'approved')

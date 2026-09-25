@@ -17,12 +17,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Check if caller has authorized staff role (admin, committee, pastor)
+    // Check if caller has authorized staff role (admin, committee, pastor) and is approved
     // Checks both Firebase Custom Claims token and verified Firestore member profile
     function isStaff() {
       return isAuthenticated() && (
-        request.auth.token.role in ['admin', 'committee', 'pastor'] ||
-        request.auth.token.admin == true ||
+        ((request.auth.token.role in ['admin', 'committee', 'pastor'] || request.auth.token.admin == true) &&
+         request.auth.token.status == 'approved') ||
         (exists(/databases/$(database)/documents/member_profiles/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.role in ['admin', 'committee', 'pastor'] &&
          get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.status == 'approved')
@@ -70,8 +70,7 @@ service cloud.firestore {
         && request.resource.data.uid == userId
         && request.resource.data.status == 'pending'
         && request.resource.data.role == 'member'
-        && request.resource.data.churchId == 'csi_main'
-        && request.resource.data.keys().hasOnly(['uid', 'fullName', 'familyNumber', 'profileImageUrl', 'email', 'phone', 'familyInfo', 'status', 'role', 'churchId', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'fullName', 'familyNumber', 'profileImageUrl', 'email', 'phone', 'familyInfo', 'status', 'role', 'churchId', 'createdAt', 'updatedAt', 'dateOfBirth', 'weddingAnniversary', 'maritalStatus', 'spouseUid', 'spouseName', 'place', 'fcmTokens'])
         && request.resource.data.keys().hasAll(['uid', 'fullName', 'familyNumber', 'profileImageUrl', 'email', 'status', 'role', 'churchId', 'createdAt', 'updatedAt'])
         && request.resource.data.fullName is string && request.resource.data.fullName.size() >= 2 && request.resource.data.fullName.size() <= 100
         && request.resource.data.familyNumber is string && request.resource.data.familyNumber.size() >= 1 && request.resource.data.familyNumber.size() <= 30
@@ -94,7 +93,7 @@ service cloud.firestore {
       allow update: if
         (
           isOwner(userId)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'familyInfo', 'profileImageUrl', 'updatedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'familyInfo', 'profileImageUrl', 'updatedAt', 'dateOfBirth', 'weddingAnniversary', 'maritalStatus', 'spouseUid', 'spouseName', 'place', 'fcmTokens'])
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.email == resource.data.email
           && request.resource.data.familyNumber == resource.data.familyNumber
@@ -166,19 +165,20 @@ service cloud.firestore {
     // ===============================================================
     match /announcements/{announcementId} {
       // Approved members can read published announcements; staff can read all (including drafts)
-      allow read: if (isApprovedMember() && resource.data.isPublished == true) || isStaff();
+      allow read: if isStaff() || (isApprovedMember() && (resource == null || resource.data.isPublished == true));
 
       // Only authorized staff can create announcements
       allow create: if isStaff()
-        && request.resource.data.keys().hasOnly(['id', 'title', 'description', 'imageUrl', 'priority', 'isPublished', 'churchId', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
-        && request.resource.data.keys().hasAll(['id', 'title', 'description', 'priority', 'isPublished', 'churchId', 'createdBy', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['id', 'announcementType', 'title', 'description', 'imageUrl', 'priority', 'isPublished', 'churchId', 'createdBy', 'createdByName', 'createdAt', 'updatedAt', 'brideName', 'brideDetails', 'groomName', 'groomDetails', 'announcementStage', 'marriageDate', 'scheduledDate', 'scheduledTime'])
+        && request.resource.data.keys().hasAll(['id', 'title', 'isPublished', 'churchId', 'createdBy', 'createdAt', 'updatedAt'])
         && request.resource.data.id == announcementId
         && request.resource.data.churchId == 'csi_main'
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.title is string && request.resource.data.title.size() >= 3 && request.resource.data.title.size() <= 150
-        && request.resource.data.description is string && request.resource.data.description.size() >= 5 && request.resource.data.description.size() <= 5000
-        && request.resource.data.priority in ['normal', 'high', 'urgent']
+        && (request.resource.data.announcementType == null || request.resource.data.announcementType in ['marriage', 'general', 'special'])
+        && request.resource.data.title is string && request.resource.data.title.size() >= 3 && request.resource.data.title.size() <= 200
         && request.resource.data.isPublished is bool
+        && (request.resource.data.description == null || request.resource.data.description is string)
+        && (request.resource.data.priority == null || request.resource.data.priority in ['normal', 'high', 'urgent'])
         && (request.resource.data.imageUrl == null || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 1000))
         && (request.resource.data.createdByName == null || (request.resource.data.createdByName is string && request.resource.data.createdByName.size() <= 100))
         && request.resource.data.createdAt is timestamp
@@ -186,14 +186,14 @@ service cloud.firestore {
 
       // Only authorized staff can update announcements (locks churchId, createdBy, createdAt)
       allow update: if isStaff()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'imageUrl', 'priority', 'isPublished', 'createdByName', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['announcementType', 'title', 'description', 'imageUrl', 'priority', 'isPublished', 'createdByName', 'updatedAt', 'brideName', 'brideDetails', 'groomName', 'groomDetails', 'announcementStage', 'marriageDate', 'scheduledDate', 'scheduledTime'])
         && request.resource.data.churchId == resource.data.churchId
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.title is string && request.resource.data.title.size() >= 3 && request.resource.data.title.size() <= 150
-        && request.resource.data.description is string && request.resource.data.description.size() >= 5 && request.resource.data.description.size() <= 5000
-        && request.resource.data.priority in ['normal', 'high', 'urgent']
+        && (request.resource.data.announcementType == null || request.resource.data.announcementType in ['marriage', 'general', 'special'])
+        && request.resource.data.title is string && request.resource.data.title.size() >= 3 && request.resource.data.title.size() <= 200
         && request.resource.data.isPublished is bool
+        && (request.resource.data.description == null || request.resource.data.description is string)
         && (request.resource.data.imageUrl == null || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 1000))
         && (request.resource.data.createdByName == null || (request.resource.data.createdByName is string && request.resource.data.createdByName.size() <= 100))
         && request.resource.data.updatedAt is timestamp;
@@ -225,6 +225,73 @@ service cloud.firestore {
         && request.resource.data.timestamp is timestamp;
 
       // Immutable and append-only
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // Phase 5: Birthday & Anniversary Bulletins: birthday_anniversary_weeks/{weekId}
+    // ===============================================================
+    match /birthday_anniversary_weeks/{weekId} {
+      // Approved members can read published bulletins; staff can view all (including drafts)
+      allow read: if isStaff() || (isApprovedMember() && (resource == null || resource.data.isPublished == true));
+
+      // Only authorized staff can create weekly bulletins
+      allow create: if isStaff()
+        && request.resource.data.id == weekId
+        && request.resource.data.churchId == 'csi_main'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.weekStartDate is timestamp
+        && request.resource.data.weekEndDate is timestamp
+        && request.resource.data.isPublished is bool;
+
+      // Only authorized staff can update bulletins (churchId and createdBy locked)
+      allow update: if isStaff()
+        && request.resource.data.churchId == resource.data.churchId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.weekStartDate is timestamp
+        && request.resource.data.weekEndDate is timestamp
+        && request.resource.data.isPublished is bool;
+
+      // Only authorized staff can delete bulletins
+      allow delete: if isStaff();
+    }
+
+    // ===============================================================
+    // Phase 5: Personal Member Reminders: member_reminders/{reminderId}
+    // ===============================================================
+    match /member_reminders/{reminderId} {
+      // Approved members can read their own reminders; staff can inspect
+      allow read: if isApprovedMember() && (resource.data.userUid == request.auth.uid || isStaff());
+
+      // Members can create/update only their own reminders
+      allow create, update: if isApprovedMember()
+        && request.resource.data.userUid == request.auth.uid
+        && request.resource.data.targetDate is timestamp
+        && request.resource.data.type in ['birthday', 'anniversary']
+        && request.resource.data.isActive is bool;
+
+      // Members can delete only their own reminders
+      allow delete: if isApprovedMember() && resource.data.userUid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Phase 5: Church Wish Logs: wish_logs/{logId}
+    // ===============================================================
+    match /wish_logs/{logId} {
+      // Senders, recipients, and staff can read wish history
+      allow read: if isApprovedMember() &&
+        (resource.data.senderUid == request.auth.uid ||
+         resource.data.recipientUid == request.auth.uid ||
+         isStaff());
+
+      // Authenticated approved member can create their own wish dispatch log
+      allow create: if isApprovedMember()
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.type in ['birthday', 'anniversary']
+        && request.resource.data.eventDate is string
+        && request.resource.data.timestamp is timestamp;
+
+      // Immutable logs
       allow update, delete: if false;
     }
   }

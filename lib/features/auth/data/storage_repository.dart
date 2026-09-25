@@ -26,6 +26,7 @@ class StorageRepository {
 
       final metadata = SettableMetadata(
         contentType: contentType,
+        cacheControl: 'public, max-age=86400',
         customMetadata: {
           'uploadedBy': uid,
           'purpose': 'church_member_profile_photo',

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/member_avatar.dart';
 import '../../../auth/models/auth_state.dart';
 import '../../../auth/models/member_profile.dart';
 import '../../../auth/providers/auth_provider.dart';
@@ -162,15 +163,25 @@ class _MemberVerificationDialogState
         ? DateFormat('MMMM d, y · h:mm a').format(m.createdAt!)
         : 'Unknown';
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Dialog(
       backgroundColor: AppColors.cardSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: AppStyles.roundedXLarge,
       ),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 24,
+        vertical: 24,
+      ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
+        constraints: BoxConstraints(
+          maxWidth: 620,
+          maxHeight: isMobile ? MediaQuery.of(context).size.height * 0.88 : 760,
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(AppStyles.space24),
+          padding: EdgeInsets.all(isMobile ? AppStyles.space16 : AppStyles.space24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -248,28 +259,10 @@ class _MemberVerificationDialogState
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             // Circular Profile Photo
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(40),
-                              child: Container(
-                                width: 80,
-                                height: 80,
-                                color: AppColors.cardSurface,
-                                child: m.profileImageUrl.isNotEmpty
-                                    ? Image.network(
-                                        m.profileImageUrl,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, error, stack) => const Icon(
-                                          Icons.person_rounded,
-                                          size: 48,
-                                          color: AppColors.mutedGold,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.person_rounded,
-                                        size: 48,
-                                        color: AppColors.mutedGold,
-                                      ),
-                              ),
+                            MemberAvatar(
+                              imageUrl: m.profileImageUrl,
+                              radius: isMobile ? 32 : 40,
+                              backgroundColor: AppColors.cardSurface,
                             ),
                             const SizedBox(width: AppStyles.space16),
                             Expanded(
@@ -369,7 +362,7 @@ class _MemberVerificationDialogState
                   ),
                 )
               else
-                _buildActionButtons(m),
+                _buildActionButtons(m, isMobile),
             ],
           ),
         ),
@@ -452,9 +445,57 @@ class _MemberVerificationDialogState
     );
   }
 
-  Widget _buildActionButtons(MemberProfile m) {
+  Widget _buildActionButtons(MemberProfile m, bool isMobile) {
     switch (m.status) {
       case MemberStatus.pending:
+        if (isMobile) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.subtleOlive,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                  label: const Text('Approve Member'),
+                  onPressed: () => _showActionConfirmDialog(
+                    targetStatus: MemberStatus.approved,
+                    actionTitle: 'Approve Membership',
+                    actionPrompt:
+                        'Confirm approval of ${m.fullName} under Family No. ${m.familyNumber}.',
+                    isReasonMandatory: false,
+                    actionColor: AppColors.subtleOlive,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppStyles.space8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.errorRed,
+                    side: const BorderSide(color: AppColors.errorRed),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Reject Application'),
+                  onPressed: () => _showActionConfirmDialog(
+                    targetStatus: MemberStatus.rejected,
+                    actionTitle: 'Reject Application',
+                    actionPrompt:
+                        'Are you sure you want to reject this applicant? A reason is mandatory and will be recorded in the audit log.',
+                    isReasonMandatory: true,
+                    actionColor: AppColors.errorRed,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
         return Row(
           children: [
             Expanded(
@@ -465,7 +506,7 @@ class _MemberVerificationDialogState
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 icon: const Icon(Icons.close_rounded, size: 18),
-                label: const Text('Reject Applicant'),
+                label: const Text('Reject Application'),
                 onPressed: () => _showActionConfirmDialog(
                   targetStatus: MemberStatus.rejected,
                   actionTitle: 'Reject Application',

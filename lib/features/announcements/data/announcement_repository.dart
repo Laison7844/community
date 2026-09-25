@@ -21,22 +21,32 @@ class AnnouncementRepository {
   CollectionReference<Map<String, dynamic>> get _auditLogs =>
       _firestore.collection(auditCollectionName);
 
-  /// Streams published announcements for church members (sorted newest first).
+  /// Streams published announcements for church members (sorted newest first, bounded by limit).
   /// Required by security rules: members can only read docs where isPublished == true.
-  Stream<List<Announcement>> streamPublishedAnnouncements() {
+  /// Automatically excludes expired marriage, general, and special announcements.
+  Stream<List<Announcement>> streamPublishedAnnouncements({int limit = 50}) {
     return _announcements
         .where('isPublished', isEqualTo: true)
         .orderBy('createdAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
+      final now = DateTime.now();
       final list = snapshot.docs
           .map((doc) => Announcement.fromMap(doc.data(), doc.id))
+          .where((a) => a.isVisibleForMembers(now))
           .toList();
 
-      // Sort priority in memory: urgent first, then high, then normal, retaining date order within each
+      // Sort: Special celebrations highlighted first, then chronological newest first
       list.sort((a, b) {
-        final pCompare = b.priority.index.compareTo(a.priority.index);
-        if (pCompare != 0) return pCompare;
+        if (a.announcementType == AnnouncementType.special &&
+            b.announcementType != AnnouncementType.special) {
+          return -1;
+        }
+        if (b.announcementType == AnnouncementType.special &&
+            a.announcementType != AnnouncementType.special) {
+          return 1;
+        }
         final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bDate.compareTo(aDate);
@@ -46,10 +56,11 @@ class AnnouncementRepository {
     });
   }
 
-  /// Streams all announcements including drafts (Staff view).
-  Stream<List<Announcement>> streamAllAnnouncements() {
+  /// Streams announcements including drafts for Staff view (bounded by limit).
+  Stream<List<Announcement>> streamAllAnnouncements({int limit = 100}) {
     return _announcements
         .orderBy('createdAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs

@@ -7,6 +7,8 @@ import '../../../core/constants/app_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../../core/widgets/logout_confirmation_dialog.dart';
+import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/responsive_container.dart';
 import '../models/auth_state.dart';
 import '../providers/auth_provider.dart';
@@ -75,16 +77,13 @@ class PendingApprovalPage extends ConsumerWidget {
                     padding: const EdgeInsets.all(AppStyles.space20),
                     child: Column(
                       children: [
-                        if (auth.profile?.profileImageUrl != null &&
-                            auth.profile!.profileImageUrl.isNotEmpty) ...[
-                          CircleAvatar(
-                            radius: 36,
-                            backgroundColor: AppColors.softBeige,
-                            backgroundImage:
-                                NetworkImage(auth.profile!.profileImageUrl),
-                          ),
-                          const SizedBox(height: AppStyles.space16),
-                        ],
+                        MemberAvatar(
+                          imageUrl: auth.profile?.profileImageUrl,
+                          radius: 36,
+                          backgroundColor: AppColors.softBeige,
+                          border: Border.all(color: AppColors.mutedGold, width: 2),
+                        ),
+                        const SizedBox(height: AppStyles.space16),
                         _buildDetailRow(
                           context,
                           icon: Icons.person_outline_rounded,
@@ -199,12 +198,7 @@ class PendingApprovalPage extends ConsumerWidget {
                     label: AppStrings.logout,
                     icon: Icons.logout_rounded,
                     variant: AppButtonVariant.outline,
-                    onPressed: () async {
-                      await ref.read(authProvider.notifier).signOut();
-                      if (context.mounted) {
-                        context.go('/welcome');
-                      }
-                    },
+                    onPressed: () => showLogoutConfirmationDialog(context, ref),
                   ),
                 ],
               ),

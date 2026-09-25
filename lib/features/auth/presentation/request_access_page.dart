@@ -56,9 +56,9 @@ class _RequestAccessPageState extends ConsumerState<RequestAccessPage> {
     try {
       final XFile? picked = await _picker.pickImage(
         source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
       );
 
       if (picked == null) return;

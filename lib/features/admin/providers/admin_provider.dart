@@ -11,12 +11,20 @@ final adminRepositoryProvider = Provider<AdminRepository>((ref) {
 });
 
 /// Provider checking whether current authenticated user has authorized staff roles:
-/// 'admin', 'committee', or 'pastor'
+/// 'admin', 'committee', or 'pastor' and has approved status
 final isStaffUserProvider = Provider<bool>((ref) {
   final auth = ref.watch(authProvider);
   if (!auth.isAuthenticated || auth.profile == null) return false;
+  if (auth.profile!.status != MemberStatus.approved) return false;
   final role = auth.profile!.role.toLowerCase();
   return ['admin', 'committee', 'pastor'].contains(role);
+});
+
+/// Provider checking whether current authenticated user is an approved church member.
+final isApprovedMemberProvider = Provider<bool>((ref) {
+  final auth = ref.watch(authProvider);
+  if (!auth.isAuthenticated || auth.profile == null) return false;
+  return auth.profile!.status == MemberStatus.approved;
 });
 
 /// Streams all members from Firestore

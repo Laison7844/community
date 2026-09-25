@@ -31,6 +31,10 @@ class AppStyles {
   static const double maxContentWidth = 480.0;
   static const double maxDashboardWidth = 1100.0;
 
+  // Responsive Breakpoints
+  static const double mobileBreakpoint = 600.0;
+  static const double tabletBreakpoint = 1024.0;
+
   // Shadows
   static const List<BoxShadow> softCardShadow = [
     BoxShadow(

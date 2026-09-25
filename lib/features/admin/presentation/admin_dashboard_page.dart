@@ -9,6 +9,8 @@ import '../../../core/constants/app_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../../core/widgets/logout_confirmation_dialog.dart';
+import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/responsive_container.dart';
 import '../../auth/models/auth_state.dart';
 import '../../auth/models/member_profile.dart';
@@ -16,6 +18,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../models/audit_log.dart';
 import '../providers/admin_provider.dart';
 import 'widgets/member_verification_dialog.dart';
+import 'widgets/manage_birthdays_dialog.dart';
 
 /// Comprehensive responsive Committee / Admin Verification Dashboard for Flutter Web.
 class AdminDashboardPage extends ConsumerStatefulWidget {
@@ -194,6 +197,22 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage>
         ),
         const SizedBox(width: AppStyles.space8),
         IconButton(
+          tooltip: 'Manage Birthdays & Anniversaries',
+          icon: const Icon(Icons.cake_outlined, color: AppColors.primaryBrown),
+          onPressed: () {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => const ManageBirthdaysDialog(),
+            );
+          },
+        ),
+        IconButton(
+          tooltip: 'Manage Parish Announcements',
+          icon: const Icon(Icons.campaign_outlined, color: AppColors.primaryBrown),
+          onPressed: () => context.push('/announcements'),
+        ),
+        IconButton(
           tooltip: 'Return to Church Home',
           icon: const Icon(Icons.home_outlined, color: AppColors.primaryBrown),
           onPressed: () => context.go('/home'),
@@ -201,12 +220,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage>
         IconButton(
           tooltip: 'Sign Out',
           icon: const Icon(Icons.logout_rounded, color: AppColors.textSecondary),
-          onPressed: () async {
-            await ref.read(authProvider.notifier).signOut();
-            if (context.mounted) {
-              context.go('/welcome');
-            }
-          },
+          onPressed: () => showLogoutConfirmationDialog(context, ref),
         ),
         const SizedBox(width: AppStyles.space12),
       ],
@@ -262,7 +276,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage>
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 2.2,
+            childAspectRatio: constraints.maxWidth < 420 ? 1.85 : 2.2,
             children: cards,
           );
         }
@@ -575,7 +589,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage>
   Widget _buildMembersList(List<MemberProfile> members) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth >= 850;
+        final isDesktop = constraints.maxWidth >= 768;
 
         if (isDesktop) {
           return _buildDesktopTable(members);
@@ -586,14 +600,16 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage>
     );
   }
 
-  /// Desktop Table with Full Columns and Actions
+  /// Desktop & Tablet Table with Full Columns and Actions
   Widget _buildDesktopTable(List<MemberProfile> members) {
     return AppCard(
       padding: EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: AppStyles.roundedLarge,
         child: SingleChildScrollView(
-          child: DataTable(
+          scrollDirection: Axis.horizontal,
+          child: SingleChildScrollView(
+            child: DataTable(
             headingRowColor: WidgetStateProperty.all(AppColors.surfaceCream),
             dataRowMaxHeight: 70,
             columnSpacing: 24,
@@ -670,16 +686,9 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage>
                   DataCell(
                     Row(
                       children: [
-                        CircleAvatar(
+                        MemberAvatar(
+                          imageUrl: m.profileImageUrl,
                           radius: 20,
-                          backgroundColor: AppColors.surfaceCream,
-                          backgroundImage: m.profileImageUrl.isNotEmpty
-                              ? NetworkImage(m.profileImageUrl)
-                              : null,
-                          child: m.profileImageUrl.isEmpty
-                              ? const Icon(Icons.person_rounded,
-                                  size: 20, color: AppColors.mutedGold)
-                              : null,
                         ),
                         const SizedBox(width: AppStyles.space12),
                         Column(
@@ -795,7 +804,8 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage>
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   /// Compact Tablet & Mobile Cards List
@@ -816,16 +826,9 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage>
             children: [
               Row(
                 children: [
-                  CircleAvatar(
+                  MemberAvatar(
+                    imageUrl: m.profileImageUrl,
                     radius: 24,
-                    backgroundColor: AppColors.surfaceCream,
-                    backgroundImage: m.profileImageUrl.isNotEmpty
-                        ? NetworkImage(m.profileImageUrl)
-                        : null,
-                    child: m.profileImageUrl.isEmpty
-                        ? const Icon(Icons.person_rounded,
-                            size: 24, color: AppColors.mutedGold)
-                        : null,
                   ),
                   const SizedBox(width: AppStyles.space12),
                   Expanded(

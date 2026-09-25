@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/admin/presentation/admin_dashboard_page.dart';
 import '../features/announcements/models/announcement.dart';
@@ -10,8 +11,14 @@ import '../features/auth/presentation/splash_page.dart';
 import '../features/auth/presentation/welcome_page.dart';
 import '../features/home/presentation/home_preview_page.dart';
 
+import '../features/birthdays/presentation/birthdays_page.dart';
+
+/// Global root navigator key for deep links & notifications
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 /// Centralized declarative routing configuration for the CSI Church App.
 final GoRouter appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: '/',
   routes: [
     GoRoute(
@@ -56,6 +63,10 @@ final GoRouter appRouter = GoRouter(
           preloadedAnnouncement: extra,
         );
       },
+    ),
+    GoRoute(
+      path: '/birthdays-anniversaries',
+      builder: (context, state) => const BirthdaysPage(),
     ),
   ],
 );
