@@ -28,11 +28,28 @@ class MemberAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final validUrl = imageUrl?.trim() ?? '';
+    final rawUrl = imageUrl?.trim() ?? '';
+    final lower = rawUrl.toLowerCase();
+    // Disallow cartoon characters, inappropriate placeholders, or invalid URLs
+    final isDisallowed = lower.contains('pikachu') ||
+        lower.contains('pokemon') ||
+        lower.contains('avatar_placeholder') ||
+        lower.contains('cartoon');
+    final uri = Uri.tryParse(rawUrl);
+    final isHttp = uri != null &&
+        (uri.isScheme('http') || uri.isScheme('https')) &&
+        uri.host.isNotEmpty;
+    final hasValidUrl = rawUrl.isNotEmpty && isHttp && !isDisallowed;
+
     final bg = backgroundColor ?? AppColors.surfaceCream;
     final fg = iconColor ?? AppColors.mutedGold;
     final size = radius * 2;
     final iSize = iconSize ?? (radius * 1.05);
+    final effectiveBorder = border ??
+        Border.all(
+          color: AppColors.mutedGold,
+          width: 1.5,
+        );
 
     Widget fallbackPlaceholder() {
       return Container(
@@ -41,7 +58,7 @@ class MemberAvatar extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           shape: BoxShape.circle,
-          border: border,
+          border: effectiveBorder,
         ),
         child: Center(
           child: Icon(
@@ -53,7 +70,7 @@ class MemberAvatar extends StatelessWidget {
       );
     }
 
-    if (validUrl.isEmpty) {
+    if (!hasValidUrl) {
       return fallbackPlaceholder();
     }
 
@@ -63,11 +80,11 @@ class MemberAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         shape: BoxShape.circle,
-        border: border,
+        border: effectiveBorder,
       ),
       child: ClipOval(
         child: Image.network(
-          validUrl,
+          rawUrl,
           width: size,
           height: size,
           cacheWidth: (size * 2).round().clamp(64, 512),

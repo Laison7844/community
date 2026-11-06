@@ -165,8 +165,11 @@ class AnnouncementCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
 
-                    // Marriage Date Bar
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -184,18 +187,21 @@ class AnnouncementCard extends StatelessWidget {
                                 color: AppColors.accentWine,
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                'Marriage Date: $marriageDateStr',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.accentWine,
+                              Flexible(
+                                child: Text(
+                                  'Marriage Date: $marriageDateStr',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.accentWine,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const Spacer(),
                         _buildReadMoreButton(),
                       ],
                     ),

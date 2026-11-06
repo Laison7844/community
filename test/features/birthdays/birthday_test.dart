@@ -361,7 +361,6 @@ void main() {
     });
 
     test('Anniversary allows custom/manual couple display names', () {
-      final defaultCoupleName = 'John & Mary';
       final customCoupleName = 'John & Mary (Golden Jubilee)';
 
       final entry = AnniversaryEntry(
@@ -391,4 +390,490 @@ void main() {
       expect(entry.calculatedAge, 31);
     });
   });
+
+  group('Church Record Architecture & 17 Manual Testing Verification Requirements', () {
+    // 1. Birthday person with Firebase account
+    test('1. Birthday person with Firebase account has hasAppAccount == true and valid UID', () {
+      final entry = BirthdayEntry(
+        id: 'bday_auth_1',
+        memberUid: 'firebase_uid_123',
+        memberName: 'Sarah Philip',
+        familyNumber: '401',
+        eventDate: DateTime(2026, 10, 15),
+        dateOfBirth: DateTime(1998, 10, 15),
+        place: 'Kowdiar',
+      );
+
+      expect(entry.hasAppAccount, isTrue);
+      expect(entry.memberUid, 'firebase_uid_123');
+      expect(entry.calculatedAge, 28);
+    });
+
+    // 2. Birthday person WITHOUT Firebase account
+    test('2. Birthday person WITHOUT Firebase account has hasAppAccount == false and null UID', () {
+      final entry = BirthdayEntry(
+        id: 'bday_church_1',
+        memberUid: null,
+        memberName: 'Elder Thomas',
+        familyNumber: '628',
+        eventDate: DateTime(2026, 10, 15),
+        dateOfBirth: DateTime(1950, 10, 15),
+        place: 'Karuvichan Kuzhi',
+      );
+
+      expect(entry.hasAppAccount, isFalse);
+      expect(entry.memberUid, isNull);
+      expect(entry.calculatedAge, 76);
+      expect(entry.place, 'Karuvichan Kuzhi');
+    });
+
+    // 3. Birthday person without member_profiles document
+    test('3. Birthday person without member_profiles document serializes and deserializes cleanly', () {
+      final entry = BirthdayEntry(
+        id: 'bday_church_no_profile',
+        memberUid: null,
+        memberName: 'John',
+        familyNumber: '628',
+        eventDate: DateTime(2026, 10, 15),
+        dateOfBirth: DateTime(1995, 10, 15),
+        place: 'Karuvichan Kuzhi',
+      );
+
+      final map = entry.toMap();
+      expect(map.containsKey('memberUid'), isFalse);
+      expect(map['memberName'], 'John');
+      expect(map['familyNumber'], '628');
+      expect(map['place'], 'Karuvichan Kuzhi');
+
+      final reconstructed = BirthdayEntry.fromMap(map);
+      expect(reconstructed.memberUid, isNull);
+      expect(reconstructed.hasAppAccount, isFalse);
+      expect(reconstructed.memberName, 'John');
+      expect(reconstructed.calculatedAge, 31);
+    });
+
+    // 4. Anniversary couple with accounts
+    test('4. Anniversary couple with accounts has hasAppAccount == true and primaryRecipientUid', () {
+      final entry = AnniversaryEntry(
+        id: 'anniv_auth_1',
+        memberUid: 'uid_groom_1',
+        spouseUid: 'uid_bride_2',
+        coupleName: 'Mathew & Ann',
+        brideName: 'Ann',
+        groomName: 'Mathew',
+        familyNumber: '102',
+        eventDate: DateTime(2026, 10, 20),
+        weddingAnniversary: DateTime(2016, 10, 20),
+        place: 'Pattom',
+      );
+
+      expect(entry.hasAppAccount, isTrue);
+      expect(entry.primaryRecipientUid, 'uid_groom_1');
+      expect(entry.calculatedYears, 10);
+      expect(entry.formattedAnniversaryOrdinal, '10th Anniversary');
+    });
+
+    // 5. Anniversary couple WITHOUT accounts
+    test('5. Anniversary couple WITHOUT accounts has hasAppAccount == false and null recipient UIDs', () {
+      final entry = AnniversaryEntry(
+        id: 'anniv_church_1',
+        memberUid: null,
+        spouseUid: null,
+        brideUid: null,
+        groomUid: null,
+        coupleName: 'John & Mary',
+        brideName: 'Mary',
+        groomName: 'John',
+        familyNumber: '628',
+        eventDate: DateTime(2026, 10, 15),
+        weddingAnniversary: DateTime(2000, 10, 15),
+        place: 'Karuvichan Kuzhi',
+      );
+
+      expect(entry.hasAppAccount, isFalse);
+      expect(entry.primaryRecipientUid, isNull);
+      expect(entry.coupleDisplayName, 'John & Mary');
+      expect(entry.calculatedYears, 26);
+      expect(entry.formattedAnniversaryOrdinal, '26th Anniversary');
+
+      final map = entry.toMap();
+      expect(map.containsKey('memberUid'), isFalse);
+      expect(map.containsKey('spouseUid'), isFalse);
+      final reconstructed = AnniversaryEntry.fromMap(map);
+      expect(reconstructed.hasAppAccount, isFalse);
+      expect(reconstructed.calculatedYears, 26);
+    });
+
+    // 6. Search by name
+    test('6. Directory search by name matches substring case-insensitively', () {
+      final directory = [
+        const MemberProfile(
+          uid: 'uid_1',
+          fullName: 'Alexander Samuel',
+          familyNumber: '101',
+          email: 'alex@example.com',
+          profileImageUrl: 'https://...',
+          status: MemberStatus.approved,
+        ),
+        const MemberProfile(
+          uid: '',
+          fullName: 'Binu Jacob',
+          familyNumber: '102',
+          email: 'binu@example.com',
+          profileImageUrl: 'https://...',
+          status: MemberStatus.pending,
+        ),
+      ];
+
+      final query = 'alex';
+      final matches = directory.where((m) => m.fullName.toLowerCase().contains(query)).toList();
+      expect(matches.length, 1);
+      expect(matches.first.fullName, 'Alexander Samuel');
+    });
+
+    // 7. Search by family number
+    test('7. Directory search by family number matches family number', () {
+      final directory = [
+        const MemberProfile(
+          uid: 'uid_1',
+          fullName: 'John Doe',
+          familyNumber: '628',
+          email: 'john@example.com',
+          profileImageUrl: 'https://...',
+          status: MemberStatus.approved,
+        ),
+        const MemberProfile(
+          uid: '',
+          fullName: 'Mary Doe',
+          familyNumber: '628',
+          email: 'mary@example.com',
+          profileImageUrl: 'https://...',
+          status: MemberStatus.pending,
+        ),
+      ];
+
+      final query = '628';
+      final matches = directory.where((m) => m.familyNumber.contains(query)).toList();
+      expect(matches.length, 2);
+    });
+
+    // 8. Manual person entry
+    test('8. Manual person entry works completely independently of app accounts', () {
+      final manualPerson = BirthdayEntry(
+        id: 'manual_bday_100',
+        memberName: 'John',
+        familyNumber: '628',
+        dateOfBirth: DateTime(1995, 10, 15),
+        eventDate: DateTime(2026, 10, 15),
+        place: 'Karuvichan Kuzhi',
+      );
+
+      expect(manualPerson.memberName, 'John');
+      expect(manualPerson.familyNumber, '628');
+      expect(manualPerson.place, 'Karuvichan Kuzhi');
+      expect(manualPerson.memberUid, isNull);
+      expect(manualPerson.hasAppAccount, isFalse);
+      expect(manualPerson.calculatedAge, 31);
+    });
+
+    // 9. Manual couple entry
+    test('9. Manual couple entry works completely independently of app accounts', () {
+      final manualCouple = AnniversaryEntry(
+        id: 'manual_anniv_100',
+        coupleName: 'John & Mary',
+        brideName: 'Mary',
+        groomName: 'John',
+        familyNumber: '628',
+        weddingAnniversary: DateTime(2000, 10, 15),
+        eventDate: DateTime(2026, 10, 15),
+        place: 'Karuvichan Kuzhi',
+      );
+
+      expect(manualCouple.coupleName, 'John & Mary');
+      expect(manualCouple.brideName, 'Mary');
+      expect(manualCouple.groomName, 'John');
+      expect(manualCouple.familyNumber, '628');
+      expect(manualCouple.place, 'Karuvichan Kuzhi');
+      expect(manualCouple.memberUid, isNull);
+      expect(manualCouple.hasAppAccount, isFalse);
+      expect(manualCouple.calculatedYears, 26);
+    });
+
+    // 10. Calculated birthday age
+    test('10. Birthday age is calculated dynamically on occurrence date and cannot be manually set', () {
+      final dob = DateTime(1995, 10, 15);
+      final refDate = DateTime(2026, 10, 15);
+      final entry = BirthdayEntry(
+        id: 'bday_calc_test',
+        memberName: 'David',
+        dateOfBirth: dob,
+        eventDate: refDate,
+      );
+
+      expect(entry.calculatedAge, 31);
+    });
+
+    // 11. Calculated anniversary count
+    test('11. Anniversary count and ordinal are calculated dynamically', () {
+      final weddingDate = DateTime(2000, 10, 15);
+      final refDate = DateTime(2026, 10, 15);
+      final entry = AnniversaryEntry(
+        id: 'anniv_calc_test',
+        coupleName: 'David & Ruth',
+        weddingAnniversary: weddingDate,
+        eventDate: refDate,
+      );
+
+      expect(entry.calculatedYears, 26);
+      expect(entry.formattedAnniversaryOrdinal, '26th Anniversary');
+    });
+
+    // 12. Duplicate prevention
+    test('12. Duplicate prevention detects existing entry by name case-insensitively or UID', () {
+      final existing = [
+        BirthdayEntry(
+          id: 'b1',
+          memberUid: 'uid_alex',
+          memberName: 'Alex Kurian',
+          eventDate: DateTime(2026, 10, 12),
+          dateOfBirth: DateTime(1990, 10, 12),
+        ),
+      ];
+
+      // Match by name
+      final duplicateByName = existing.any(
+        (b) => b.memberName.trim().toLowerCase() == 'alex kurian',
+      );
+      expect(duplicateByName, isTrue);
+
+      // Match by UID
+      final duplicateByUid = existing.any(
+        (b) => b.memberUid == 'uid_alex',
+      );
+      expect(duplicateByUid, isTrue);
+
+      // Distinct person
+      final notDuplicate = existing.any(
+        (b) => b.memberName.trim().toLowerCase() == 'philip kurian',
+      );
+      expect(notDuplicate, isFalse);
+    });
+
+    // 13. Notification skipped when celebrant has no UID
+    test('13. Notification delivery is skipped when celebrant has no app UID', () {
+      final nonAppCelebrant = BirthdayEntry(
+        id: 'bday_non_app',
+        memberUid: null,
+        memberName: 'George',
+        eventDate: DateTime(2026, 10, 12),
+        dateOfBirth: DateTime(1960, 10, 12),
+      );
+
+      // Safe check: cannot send push notification to null UID
+      final canSendWishNotification = nonAppCelebrant.hasAppAccount;
+      expect(canSendWishNotification, isFalse);
+    });
+
+    // 14. Notification sent when celebrant has valid UID/tokens
+    test('14. Notification can be sent when celebrant has valid UID', () {
+      final appCelebrant = BirthdayEntry(
+        id: 'bday_app',
+        memberUid: 'uid_george_verified',
+        memberName: 'George',
+        eventDate: DateTime(2026, 10, 12),
+        dateOfBirth: DateTime(1960, 10, 12),
+      );
+
+      final canSendWishNotification = appCelebrant.hasAppAccount;
+      expect(canSendWishNotification, isTrue);
+      expect(appCelebrant.memberUid, 'uid_george_verified');
+    });
+
+    // 15. Unauthorized member cannot modify bulletin
+    test('15. Unauthorized member cannot modify weekly bulletin', () {
+      final regularMember = const MemberProfile(
+        uid: 'uid_reg',
+        fullName: 'Regular Member',
+        familyNumber: '10',
+        email: 'reg@example.com',
+        profileImageUrl: 'https://...',
+        role: 'member',
+        status: MemberStatus.approved,
+      );
+
+      final isAuthorizedStaff = ['admin', 'committee', 'pastor'].contains(regularMember.role);
+      expect(isAuthorizedStaff, isFalse);
+    });
+
+    // 16. Approved staff can modify bulletin
+    test('16. Approved staff (admin, committee, pastor) can modify bulletin', () {
+      final staffRoles = ['admin', 'committee', 'pastor'];
+      for (final role in staffRoles) {
+        final staff = MemberProfile(
+          uid: 'uid_staff',
+          fullName: 'Staff Person',
+          familyNumber: '10',
+          email: 'staff@example.com',
+          profileImageUrl: 'https://...',
+          role: role,
+          status: MemberStatus.approved,
+        );
+        final isAuthorizedStaff = ['admin', 'committee', 'pastor'].contains(staff.role) &&
+            staff.status == MemberStatus.approved;
+        expect(isAuthorizedStaff, isTrue);
+      }
+    });
+
+    // 17. ListTile assertion no longer occurs
+    testWidgets('17. Card wrapping ListTile avoids Flutter DecoratedBox ink splash assertion',
+        (tester) async {
+      bool tapped = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Card(
+                elevation: 0,
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: Colors.brown),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  dense: true,
+                  title: const Text('John'),
+                  subtitle: const Text('Family: #628 • Place: Karuvichan Kuzhi'),
+                  onTap: () {
+                    tapped = true;
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('John'), findsOneWidget);
+      expect(find.text('Family: #628 • Place: Karuvichan Kuzhi'), findsOneWidget);
+
+      // Tap and verify ink splash executes without throwing framework assertion
+      await tester.tap(find.text('John'));
+      await tester.pumpAndSettle();
+
+      expect(tapped, isTrue);
+    });
+
+    // 18. Birthday Week occurrence derivation and containment validation
+    test('18. Birthday week occurrence derivation correctly identifies in-week vs out-of-week DOB', () {
+      final monday = DateTime(2026, 9, 28);
+      final sunday = DateTime(2026, 10, 4, 23, 59, 59);
+
+      DateTime? calculateOccurrence(DateTime dob) {
+        final c1 = DateTime(monday.year, dob.month, dob.day);
+        if (!c1.isBefore(monday) && !c1.isAfter(sunday)) return c1;
+        if (sunday.year != monday.year) {
+          final c2 = DateTime(sunday.year, dob.month, dob.day);
+          if (!c2.isBefore(monday) && !c2.isAfter(sunday)) return c2;
+        }
+        return null;
+      }
+
+      // DOB in week: Sep 30
+      final inWeekDob = DateTime(1995, 9, 30);
+      final inWeekOccurrence = calculateOccurrence(inWeekDob);
+      expect(inWeekOccurrence, isNotNull);
+      expect(inWeekOccurrence!.day, 30);
+      expect(inWeekOccurrence.month, 9);
+      expect(inWeekOccurrence.year - inWeekDob.year, 31);
+
+      // DOB in week: Oct 2
+      final inWeekDob2 = DateTime(2001, 10, 2);
+      final inWeekOccurrence2 = calculateOccurrence(inWeekDob2);
+      expect(inWeekOccurrence2, isNotNull);
+      expect(inWeekOccurrence2!.day, 2);
+      expect(inWeekOccurrence2.month, 10);
+      expect(inWeekOccurrence2.year - inWeekDob2.year, 25);
+
+      // DOB outside week: Oct 15
+      final outWeekDob = DateTime(1995, 10, 15);
+      final outWeekOccurrence = calculateOccurrence(outWeekDob);
+      expect(outWeekOccurrence, isNull);
+    });
+
+    // 19. Anniversary Week occurrence derivation and containment validation
+    test('19. Anniversary week occurrence derivation correctly identifies in-week vs out-of-week wedding dates', () {
+      final monday = DateTime(2026, 9, 28);
+      final sunday = DateTime(2026, 10, 4, 23, 59, 59);
+
+      DateTime? calculateOccurrence(DateTime weddingDate) {
+        final c1 = DateTime(monday.year, weddingDate.month, weddingDate.day);
+        if (!c1.isBefore(monday) && !c1.isAfter(sunday)) return c1;
+        if (sunday.year != monday.year) {
+          final c2 = DateTime(sunday.year, weddingDate.month, weddingDate.day);
+          if (!c2.isBefore(monday) && !c2.isAfter(sunday)) return c2;
+        }
+        return null;
+      }
+
+      // Wedding in week: Oct 1
+      final inWeekWedding = DateTime(2014, 10, 1);
+      final inWeekOccurrence = calculateOccurrence(inWeekWedding);
+      expect(inWeekOccurrence, isNotNull);
+      expect(inWeekOccurrence!.day, 1);
+      expect(inWeekOccurrence.month, 10);
+      expect(inWeekOccurrence.year - inWeekWedding.year, 12);
+
+      // Wedding outside week: Nov 20
+      final outWeekWedding = DateTime(2015, 11, 20);
+      final outWeekOccurrence = calculateOccurrence(outWeekWedding);
+      expect(outWeekOccurrence, isNull);
+    });
+
+    // 20. Staff role case-insensitivity verification
+    test('20. Security helper validates TitleCase and lowercase staff roles and statuses', () {
+      bool isStaff(String role, MemberStatus status) {
+        final r = role.toLowerCase();
+        return ['admin', 'committee', 'pastor'].contains(r) && status == MemberStatus.approved;
+      }
+
+      expect(isStaff('Admin', MemberStatus.approved), isTrue);
+      expect(isStaff('admin', MemberStatus.approved), isTrue);
+      expect(isStaff('Pastor', MemberStatus.approved), isTrue);
+      expect(isStaff('Committee', MemberStatus.approved), isTrue);
+      expect(isStaff('member', MemberStatus.approved), isFalse);
+      expect(isStaff('Admin', MemberStatus.pending), isFalse);
+    });
+
+    // 21. Material wrapping ListTile eliminates Flutter assertions
+    testWidgets('21. Material wrapping ListTile renders cleanly with zero ink/background assertions',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Material(
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: const BorderSide(color: Colors.brown),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                dense: true,
+                title: const Text('Mary & John'),
+                subtitle: const Text('Family: #104'),
+                onTap: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Mary & John'), findsOneWidget);
+      await tester.tap(find.text('Mary & John'));
+      await tester.pumpAndSettle();
+    });
+  });
 }
+

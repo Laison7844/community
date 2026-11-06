@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -162,16 +163,50 @@ class BirthdaysPage extends ConsumerWidget {
                       color: AppColors.primaryBrown,
                     ),
                   ),
-                  error: (err, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppStyles.space20),
-                      child: Text(
-                        'Error loading week: $err',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.errorRed),
+                  error: (err, stack) {
+                    if (kDebugMode) {
+                      debugPrint('[BirthdaysPage] Error loading week $selectedWeekId: $err\n$stack');
+                    }
+                    final isPermDenied = err.toString().contains('permission-denied');
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppStyles.space24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isPermDenied ? Icons.lock_outline_rounded : Icons.error_outline_rounded,
+                              size: 48,
+                              color: isPermDenied ? AppColors.mutedGold : AppColors.errorRed,
+                            ),
+                            const SizedBox(height: AppStyles.space12),
+                            Text(
+                              isPermDenied
+                                  ? 'Membership Approval Required'
+                                  : 'Could Not Load Bulletin',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryBrown,
+                              ),
+                            ),
+                            const SizedBox(height: AppStyles.space8),
+                            Text(
+                              isPermDenied
+                                  ? 'Approved church membership is required to access parish celebration bulletins. If your account was recently approved, please try refreshing your session.'
+                                  : 'An error occurred while loading this week\'s bulletin: $err',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                   data: (week) {
                     if (week == null) {
                       return _buildUnpublishedOrEmptyWeek(
@@ -457,7 +492,7 @@ class BirthdaysPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$dateStr • ${entry.calculatedAge} years${entry.place != null ? ' • ${entry.place}' : ''}',
+                  '$dateStr • ${entry.calculatedAge} years${entry.place != null && entry.place!.isNotEmpty ? ' • ${entry.place}' : ''}${entry.familyNumber != null && entry.familyNumber!.isNotEmpty ? ' • #${entry.familyNumber}' : ''}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -471,11 +506,11 @@ class BirthdaysPage extends ConsumerWidget {
           ),
           const SizedBox(width: AppStyles.space8),
 
-          // Actions Row: Wish (on today) + Remind me
+          // Actions Row: Wish (on today, app users only) + Remind me
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (entry.isToday) ...[
+              if (entry.isToday && entry.hasAppAccount) ...[
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.subtleOlive,
@@ -492,7 +527,7 @@ class BirthdaysPage extends ConsumerWidget {
                   label: const Text('Wish', style: TextStyle(fontSize: 11)),
                   onPressed: () => _openWishDialog(
                     context,
-                    recipientUid: entry.memberUid,
+                    recipientUid: entry.memberUid!,
                     recipientName: entry.memberName,
                     type: 'birthday',
                     eventDate: entry.eventDate,
@@ -599,7 +634,7 @@ class BirthdaysPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$dateStr • ${entry.formattedAnniversaryOrdinal}${entry.place != null ? ' • ${entry.place}' : ''}',
+                  '$dateStr • ${entry.formattedAnniversaryOrdinal}${entry.place != null && entry.place!.isNotEmpty ? ' • ${entry.place}' : ''}${entry.familyNumber != null && entry.familyNumber!.isNotEmpty ? ' • #${entry.familyNumber}' : ''}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -613,11 +648,11 @@ class BirthdaysPage extends ConsumerWidget {
           ),
           const SizedBox(width: AppStyles.space8),
 
-          // Actions Row: Wish + Remind me
+          // Actions Row: Wish (on today, app users only) + Remind me
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (entry.isToday) ...[
+              if (entry.isToday && entry.hasAppAccount) ...[
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accentWine,
@@ -634,7 +669,7 @@ class BirthdaysPage extends ConsumerWidget {
                   label: const Text('Wish', style: TextStyle(fontSize: 11)),
                   onPressed: () => _openWishDialog(
                     context,
-                    recipientUid: entry.memberUid,
+                    recipientUid: entry.primaryRecipientUid!,
                     recipientName: entry.coupleName,
                     type: 'anniversary',
                     eventDate: entry.eventDate,
@@ -716,20 +751,24 @@ class BirthdaysPage extends ConsumerWidget {
             const Icon(Icons.event_busy_rounded,
                 size: 56, color: AppColors.mutedGold),
             const SizedBox(height: AppStyles.space16),
-            const Text(
-              'No Published Bulletin For This Week',
+            Text(
+              isStaff
+                  ? 'No birthdays or anniversaries have been added for this week yet.'
+                  : 'No Published Bulletin For This Week',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: AppColors.primaryBrown,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'The parish bulletin for this week has not been published yet.',
+            Text(
+              isStaff
+                  ? 'Click below to create and publish this week\'s parish bulletin.'
+                  : 'The parish bulletin for this week has not been published yet.',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
               ),

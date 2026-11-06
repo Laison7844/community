@@ -7,6 +7,7 @@ import '../../../core/constants/app_styles.dart';
 import '../../../core/widgets/app_logo.dart';
 import '../models/auth_state.dart';
 import '../providers/auth_provider.dart';
+import '../../admin/providers/admin_provider.dart';
 
 /// Initial splash screen with church branding and session restoration.
 class SplashPage extends ConsumerStatefulWidget {
@@ -36,10 +37,13 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   void _checkAndNavigate() {
     if (!_minTimeElapsed || !mounted) return;
     final auth = ref.read(authProvider);
+    final isStaff = ref.read(isStaffUserProvider);
     if (auth.isLoading) return; // Wait until background session restore finishes
 
     if (!auth.isAuthenticated) {
       context.go('/welcome');
+    } else if (isStaff) {
+      context.go('/admin');
     } else if (auth.status == MemberStatus.pending) {
       context.go('/pending-approval');
     } else if (auth.status == MemberStatus.approved) {

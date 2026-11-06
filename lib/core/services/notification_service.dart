@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 
 /// Top-level background message entry point required by flutter_firebase_messaging
 @pragma('vm:entry-point')
@@ -26,6 +28,9 @@ class NotificationService {
 
   String? _cachedFcmToken;
   String? get fcmToken => _cachedFcmToken;
+
+  String? _lastRegisteredToken;
+  String? _lastRegisteredUid;
 
   bool _initialized = false;
   void Function(String route)? _onNavigateCallback;
@@ -82,9 +87,26 @@ class NotificationService {
         _handleNotificationRoute(initialMessage);
       }
 
-      // 7. Listen to token refresh
-      _fcm.onTokenRefresh.listen((newToken) {
+      // 7. Listen to token refresh and automatically register with backend if authenticated
+      _fcm.onTokenRefresh.listen((newToken) async {
         _cachedFcmToken = newToken;
+        if (kDebugMode) {
+          debugPrint('[NotificationService] FCM token refreshed: $newToken');
+        }
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null && currentUser.uid.isNotEmpty) {
+          try {
+            final idToken = await currentUser.getIdToken();
+            await registerTokenWithBackend(
+              uid: currentUser.uid,
+              idToken: idToken,
+            );
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('[NotificationService] Auto-registration of refreshed token failed: $e');
+            }
+          }
+        }
       });
     } catch (e) {
       if (kDebugMode) {
@@ -110,14 +132,22 @@ class NotificationService {
     }
   }
 
-  /// Registers the device token with the Node.js backend and Firestore profile
+  /// Registers the device token with the Node.js backend and Firestore profile.
+  /// Deduplicates calls to avoid unnecessary registrations on rebuilds.
   Future<void> registerTokenWithBackend({
     required String uid,
     String? idToken,
-    String serverBaseUrl = 'http://localhost:5001',
+    String? serverBaseUrl,
   }) async {
     final token = _cachedFcmToken ?? await retrieveAndCacheToken();
     if (token == null || token.isEmpty || uid.isEmpty) return;
+
+    // Avoid duplicate network registration for the same token & uid session
+    if (token == _lastRegisteredToken && uid == _lastRegisteredUid) {
+      return;
+    }
+
+    final effectiveBaseUrl = serverBaseUrl ?? AppConfig.apiBaseUrl;
 
     // 1. Direct Firestore profile sync (resilient fallback)
     try {
@@ -131,8 +161,8 @@ class NotificationService {
     // 2. Node.js backend registration
     if (idToken != null && idToken.isNotEmpty) {
       try {
-        final url = Uri.parse('$serverBaseUrl/api/tokens/register');
-        await _http.post(
+        final url = Uri.parse('$effectiveBaseUrl/api/tokens/register');
+        final response = await _http.post(
           url,
           headers: {
             'Content-Type': 'application/json',
@@ -140,12 +170,29 @@ class NotificationService {
           },
           body: jsonEncode({'token': token}),
         );
+        if (response.statusCode < 400) {
+          _lastRegisteredToken = token;
+          _lastRegisteredUid = uid;
+          if (kDebugMode) {
+            debugPrint('[NotificationService] FCM token registered with backend successfully.');
+          }
+        }
       } catch (e) {
         if (kDebugMode) {
           debugPrint('[NotificationService] Backend token registration failed: $e');
         }
       }
+    } else {
+      // Even without idToken (e.g. testing or local), mark as registered to prevent repeated calls
+      _lastRegisteredToken = token;
+      _lastRegisteredUid = uid;
     }
+  }
+
+  /// Clears in-memory registration state on logout (preserves other devices in Firestore)
+  void clearSession() {
+    _lastRegisteredToken = null;
+    _lastRegisteredUid = null;
   }
 
   /// Handles incoming foreground message

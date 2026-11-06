@@ -87,99 +87,104 @@ class ReminderScheduler {
     ];
 
     for (const event of allEvents) {
-      // Find all active reminders set for this entry
-      const remindersSnap = await db.collection('member_reminders')
-        .where('entryId', 'isEqualTo', event.id)
-        .where('isActive', 'isEqualTo', true)
-        .get();
+      try {
+        // Find all active reminders set for this entry
+        // Uses '==' operator matching Firestore Admin SDK specifications
+        const remindersSnap = await db.collection('member_reminders')
+          .where('entryId', '==', event.id)
+          .where('isActive', '==', true)
+          .get();
 
-      if (remindersSnap.empty) continue;
+        if (remindersSnap.empty) continue;
 
-      for (const reminderDoc of remindersSnap.docs) {
-        const reminder = reminderDoc.data();
-        const userUid = reminder.userUid;
-        if (!userUid) continue;
+        for (const reminderDoc of remindersSnap.docs) {
+          try {
+            const reminder = reminderDoc.data();
+            const userUid = reminder.userUid;
+            if (!userUid) continue;
 
-        // Deduplication check: verify notification hasn't already been sent today
-        const dedupId = `remind_${userUid}_${event.id}_${todayStr}`;
-        const logRef = db.collection('notification_logs').doc(dedupId);
-        const existingLog = await logRef.get();
+            // Deduplication check: verify notification hasn't already been sent today
+            const dedupId = `remind_${userUid}_${event.id}_${todayStr}`;
+            const logRef = db.collection('notification_logs').doc(dedupId);
+            const existingLog = await logRef.get();
 
-        if (existingLog.exists) {
-          // Already sent today; skip
-          continue;
-        }
-
-        // Resolve user FCM device tokens
-        const tokens = await TokenService.getTokensForUser(userUid);
-        if (tokens.length === 0) continue;
-
-        const title = event.type === 'birthday' ? '🎂 Birthday Reminder' : '💍 Anniversary Reminder';
-        const body = event.type === 'birthday'
-            ? `Today is ${event.targetName}'s birthday 🎂`
-            : `Today is ${event.targetName}'s wedding anniversary 💍`;
-
-        const payload = {
-          tokens,
-          notification: {
-            title,
-            body,
-          },
-          data: {
-            type: 'reminder',
-            eventType: event.type,
-            entryId: event.id,
-            targetName: event.targetName,
-            route: '/birthdays-anniversaries',
-          },
-          android: {
-            priority: 'high',
-            notification: {
-              channelId: 'church_reminders_channel',
-              sound: 'default',
-            },
-          },
-          apns: {
-            payload: {
-              aps: {
-                sound: 'default',
-              },
-            },
-          },
-        };
-
-        try {
-          const resp = await messaging.sendEachForMulticast(payload);
-          if (resp.successCount > 0) {
-            sentCount += resp.successCount;
-
-            // Record log to prevent duplicate sends
-            await logRef.set({
-              id: dedupId,
-              userUid,
-              entryId: event.id,
-              targetName: event.targetName,
-              type: event.type,
-              dateStr: todayStr,
-              timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            });
-          }
-
-          // Cleanup invalid tokens
-          resp.responses.forEach((r, idx) => {
-            if (!r.success) {
-              const errCode = r.error?.code;
-              if (
-                errCode === 'messaging/invalid-registration-token' ||
-                errCode === 'messaging/registration-token-not-registered'
-              ) {
-                TokenService.removeToken(userUid, tokens[idx]);
-              }
+            if (existingLog.exists) {
+              // Already sent today; skip
+              continue;
             }
-          });
-        } catch (err) {
-          console.warn(`[ReminderScheduler] Failed sending reminder to ${userUid}:`, err.message);
+
+            // Resolve user FCM device tokens
+            const tokens = await TokenService.getTokensForUser(userUid);
+            if (tokens.length === 0) continue;
+
+            const title = event.type === 'birthday' ? '🎂 Birthday Reminder' : '💍 Anniversary Reminder';
+            const body = event.type === 'birthday'
+                ? `Today is ${event.targetName}'s birthday 🎂`
+                : `Today is ${event.targetName}'s wedding anniversary 💍`;
+
+            const payload = {
+              tokens,
+              notification: {
+                title,
+                body,
+              },
+              data: {
+                type: 'reminder',
+                eventType: event.type,
+                entryId: event.id,
+                targetName: event.targetName,
+                route: '/birthdays-anniversaries',
+              },
+              android: {
+                priority: 'high',
+                notification: {
+                  channelId: 'church_reminders_channel',
+                  sound: 'default',
+                },
+              },
+              apns: {
+                payload: {
+                  aps: {
+                    sound: 'default',
+                  },
+                },
+              },
+            };
+
+            const resp = await messaging.sendEachForMulticast(payload);
+            if (resp.successCount > 0) {
+              sentCount += resp.successCount;
+
+              // Record log to prevent duplicate sends
+              await logRef.set({
+                id: dedupId,
+                userUid,
+                entryId: event.id,
+                targetName: event.targetName,
+                type: event.type,
+                dateStr: todayStr,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            }
+
+            // Cleanup invalid tokens
+            resp.responses.forEach((r, idx) => {
+              if (!r.success) {
+                const errCode = r.error?.code;
+                if (
+                  errCode === 'messaging/invalid-registration-token' ||
+                  errCode === 'messaging/registration-token-not-registered'
+                ) {
+                  TokenService.removeToken(userUid, tokens[idx]);
+                }
+              }
+            });
+          } catch (err) {
+            console.warn(`[ReminderScheduler] Failed sending reminder to subscriber:`, err.message);
+          }
         }
+      } catch (eventErr) {
+        console.warn(`[ReminderScheduler] Error processing event ${event.id}:`, eventErr.message);
       }
     }
 

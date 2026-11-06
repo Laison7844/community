@@ -21,20 +21,21 @@ service cloud.firestore {
     // Checks both Firebase Custom Claims token and verified Firestore member profile
     function isStaff() {
       return isAuthenticated() && (
-        ((request.auth.token.role in ['admin', 'committee', 'pastor'] || request.auth.token.admin == true) &&
-         request.auth.token.status == 'approved') ||
+        (((request.auth.token.role in ['admin', 'Admin', 'ADMIN', 'committee', 'Committee', 'COMMITTEE', 'pastor', 'Pastor', 'PASTOR']) ||
+          request.auth.token.admin == true || request.auth.token.admin == 'true') &&
+         (request.auth.token.status in ['approved', 'Approved', 'APPROVED'])) ||
         (exists(/databases/$(database)/documents/member_profiles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.role in ['admin', 'committee', 'pastor'] &&
-         get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.status == 'approved')
+         (get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.role in ['admin', 'Admin', 'ADMIN', 'committee', 'Committee', 'COMMITTEE', 'pastor', 'Pastor', 'PASTOR']) &&
+         (get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.status in ['approved', 'Approved', 'APPROVED']))
       );
     }
 
     // Check if caller is an active, approved church member
     function isApprovedMember() {
       return isAuthenticated() && (
-        request.auth.token.status == 'approved' ||
+        (request.auth.token.status in ['approved', 'Approved', 'APPROVED']) ||
         (exists(/databases/$(database)/documents/member_profiles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.status == 'approved')
+         (get(/databases/$(database)/documents/member_profiles/$(request.auth.uid)).data.status in ['approved', 'Approved', 'APPROVED']))
       );
     }
 
@@ -232,8 +233,14 @@ service cloud.firestore {
     // Phase 5: Birthday & Anniversary Bulletins: birthday_anniversary_weeks/{weekId}
     // ===============================================================
     match /birthday_anniversary_weeks/{weekId} {
-      // Approved members can read published bulletins; staff can view all (including drafts)
-      allow read: if isStaff() || (isApprovedMember() && (resource == null || resource.data.isPublished == true));
+      // Single-document read:
+      // Staff can read any bulletin (draft or published, existing or not yet created).
+      // Approved members can read published bulletins, or check non-existent bulletins (empty state).
+      allow get: if isStaff() || (isApprovedMember() && (resource == null || resource.data.isPublished == true));
+
+      // Collection queries (historical archive, etc.):
+      // Staff can query all; approved members can query published bulletins.
+      allow list: if isStaff() || (isApprovedMember() && resource.data.isPublished == true);
 
       // Only authorized staff can create weekly bulletins
       allow create: if isStaff()
@@ -244,10 +251,9 @@ service cloud.firestore {
         && request.resource.data.weekEndDate is timestamp
         && request.resource.data.isPublished is bool;
 
-      // Only authorized staff can update bulletins (churchId and createdBy locked)
+      // Only authorized staff can update bulletins (churchId locked)
       allow update: if isStaff()
         && request.resource.data.churchId == resource.data.churchId
-        && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.weekStartDate is timestamp
         && request.resource.data.weekEndDate is timestamp
         && request.resource.data.isPublished is bool;

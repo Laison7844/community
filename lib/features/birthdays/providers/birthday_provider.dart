@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../admin/providers/admin_provider.dart';
+import '../../auth/models/auth_state.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/birthday_repository.dart';
 import '../models/birthday_anniversary_week.dart';
@@ -45,15 +47,45 @@ final selectedWeekIdProvider =
 /// Members only receive the week if it is published; staff receive drafts as well.
 final weekBulletinStreamProvider =
     StreamProvider.autoDispose<BirthdayAnniversaryWeek?>((ref) {
+  final auth = ref.watch(authProvider);
+  if (auth.isLoading) {
+    // Keep loading state until authentication / staff profile completes restoration
+    return const Stream.empty();
+  }
+
+  // If user is not authenticated or not an approved member, return empty state safely
+  if (!auth.isAuthenticated || auth.profile == null) {
+    return Stream.value(null);
+  }
+  if (auth.profile!.status != MemberStatus.approved) {
+    return Stream.value(null);
+  }
+
   final weekId = ref.watch(selectedWeekIdProvider);
   final isStaff = ref.watch(isStaffUserProvider);
   final repo = ref.watch(birthdayRepositoryProvider);
+
+  if (kDebugMode) {
+    debugPrint(
+      '[weekBulletinStreamProvider] Diagnostic: uid=${auth.uid != null ? "${auth.uid!.substring(0, 4)}..." : "null"}, '
+      'isAuthenticated=${auth.isAuthenticated}, '
+      'role=${auth.profile?.role}, '
+      'status=${auth.profile?.status}, '
+      'isStaff=$isStaff, '
+      'weekId=$weekId',
+    );
+  }
+
   return repo.streamWeek(weekId, isStaff: isStaff);
 });
 
 /// Streams historical weeks for navigation dropdown / archive.
 final historicalWeeksStreamProvider =
     StreamProvider.autoDispose<List<BirthdayAnniversaryWeek>>((ref) {
+  final auth = ref.watch(authProvider);
+  if (!auth.isAuthenticated || auth.profile == null || auth.profile!.status != MemberStatus.approved) {
+    return Stream.value([]);
+  }
   final isStaff = ref.watch(isStaffUserProvider);
   final repo = ref.watch(birthdayRepositoryProvider);
   return repo.streamHistoricalWeeks(limit: 12, isStaff: isStaff);
@@ -65,6 +97,9 @@ final memberRemindersStreamProvider =
   final auth = ref.watch(authProvider);
   final userUid = auth.uid;
   if (userUid == null || userUid.isEmpty) {
+    return Stream.value([]);
+  }
+  if (auth.profile == null || auth.profile!.status != MemberStatus.approved) {
     return Stream.value([]);
   }
   final weekId = ref.watch(selectedWeekIdProvider);

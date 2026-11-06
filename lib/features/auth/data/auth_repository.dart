@@ -14,6 +14,15 @@ class AuthRepository {
   /// Current signed-in Firebase user
   User? get currentUser => _firebaseAuth.currentUser;
 
+  /// Retrieves Firebase ID token for backend API authentication
+  Future<String?> getIdToken([bool forceRefresh = false]) async {
+    try {
+      return await _firebaseAuth.currentUser?.getIdToken(forceRefresh);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Sign up with email and password
   Future<UserCredential> signUpWithEmailAndPassword({
     required String email,

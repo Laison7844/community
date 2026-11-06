@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../../core/config/app_config.dart';
 import '../models/birthday_anniversary_week.dart';
 import '../models/member_reminder.dart';
 
@@ -9,7 +11,7 @@ import '../models/member_reminder.dart';
 class BirthdayRepository {
   final FirebaseFirestore? _customFirestore;
   final http.Client? _customHttpClient;
-  final String serverBaseUrl;
+  final String? serverBaseUrl;
 
   static const String weeksCollection = 'birthday_anniversary_weeks';
   static const String remindersCollection = 'member_reminders';
@@ -18,9 +20,11 @@ class BirthdayRepository {
   BirthdayRepository({
     FirebaseFirestore? firestore,
     http.Client? httpClient,
-    this.serverBaseUrl = 'http://localhost:5001',
+    this.serverBaseUrl,
   })  : _customFirestore = firestore,
         _customHttpClient = httpClient;
+
+  String get _effectiveBaseUrl => serverBaseUrl ?? AppConfig.apiBaseUrl;
 
   FirebaseFirestore get _firestore =>
       _customFirestore ?? FirebaseFirestore.instance;
@@ -37,21 +41,36 @@ class BirthdayRepository {
       _firestore.collection(wishLogsCollection);
 
   /// Streams a specific weekly bulletin.
-  /// For members: safely queries documents where isPublished == true, avoiding permission-denied.
+  /// For members: queries documents where isPublished == true and id == weekId,
+  /// avoiding permission-denied on drafts and non-existent weeks.
   /// For staff: listens directly to the document for real-time draft/published editing.
   Stream<BirthdayAnniversaryWeek?> streamWeek(String weekId, {required bool isStaff}) {
+    if (kDebugMode) {
+      debugPrint('[BirthdayRepository] streamWeek weekId: $weekId, isStaff: $isStaff, path: $weeksCollection/$weekId');
+    }
+
     if (isStaff) {
-      return _weeks.doc(weekId).snapshots().map((doc) {
+      return _weeks.doc(weekId).snapshots().handleError((e) {
+        if (kDebugMode) {
+          debugPrint('[BirthdayRepository] Error streaming week doc (staff): $e');
+        }
+        throw e;
+      }).map((doc) {
         if (!doc.exists || doc.data() == null) return null;
         return BirthdayAnniversaryWeek.fromMap(doc.data()!, doc.id);
       });
     }
 
     return _weeks
-        .where(FieldPath.documentId, isEqualTo: weekId)
         .where('isPublished', isEqualTo: true)
+        .where('id', isEqualTo: weekId)
         .snapshots()
-        .map((snap) {
+        .handleError((e) {
+      if (kDebugMode) {
+        debugPrint('[BirthdayRepository] Error querying week (member): $e');
+      }
+      throw e;
+    }).map((snap) {
       if (snap.docs.isEmpty) return null;
       return BirthdayAnniversaryWeek.fromMap(snap.docs.first.data(), snap.docs.first.id);
     });
@@ -220,7 +239,7 @@ class BirthdayRepository {
     // 2. Dispatch push notification via Node.js Backend API
     if (idToken != null && idToken.isNotEmpty) {
       try {
-        final url = Uri.parse('$serverBaseUrl/api/wishes/send');
+        final url = Uri.parse('$_effectiveBaseUrl/api/wishes/send');
         final response = await _http.post(
           url,
           headers: {

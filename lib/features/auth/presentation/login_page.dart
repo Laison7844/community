@@ -12,6 +12,7 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/responsive_container.dart';
 import '../models/auth_state.dart';
 import '../providers/auth_provider.dart';
+import '../../admin/providers/admin_provider.dart';
 
 /// Login screen enabling members to sign in with email & password.
 class LoginPage extends ConsumerStatefulWidget {
@@ -44,8 +45,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (!mounted) return;
 
     final auth = ref.read(authProvider);
+    final isStaff = ref.read(isStaffUserProvider);
     if (success) {
-      if (auth.status == MemberStatus.pending) {
+      if (isStaff) {
+        context.go('/admin');
+      } else if (auth.status == MemberStatus.pending) {
         context.go('/pending-approval');
       } else if (auth.status == MemberStatus.approved) {
         context.go('/home');

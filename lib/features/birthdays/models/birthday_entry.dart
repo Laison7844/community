@@ -3,22 +3,27 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Single church member birthday record within a weekly bulletin.
 class BirthdayEntry {
   final String id;
-  final String memberUid;
-  final String memberName;
+  final String? memberUid;        // Optional/null: church person does not require an app account
+  final String memberName;       // Person Name *
+  final String? familyNumber;     // Family Number (optional)
   final DateTime eventDate;       // Date of birthday occurrence in the current week
   final DateTime dateOfBirth;     // Historical birth date containing the birth year
-  final String? place;            // Location / Parish unit (e.g. 'Thiruvananthapuram')
+  final String? place;            // Location / Parish unit (e.g. 'Karuvichan Kuzhi')
   final String? profileImageUrl;
 
   const BirthdayEntry({
     required this.id,
-    required this.memberUid,
+    this.memberUid,
     required this.memberName,
+    this.familyNumber,
     required this.eventDate,
     required this.dateOfBirth,
     this.place,
     this.profileImageUrl,
   });
+
+  /// True if celebrant has a linked app user account
+  bool get hasAppAccount => memberUid != null && memberUid!.trim().isNotEmpty;
 
   /// Automatically calculates the age on the birthday occurrence date
   int get calculatedAge {
@@ -48,8 +53,9 @@ class BirthdayEntry {
     final now = DateTime.now();
     return BirthdayEntry(
       id: map['id'] as String? ?? '',
-      memberUid: map['memberUid'] as String? ?? '',
-      memberName: map['memberName'] as String? ?? '',
+      memberUid: map['memberUid'] as String?,
+      memberName: (map['name'] ?? map['memberName']) as String? ?? '',
+      familyNumber: map['familyNumber'] as String?,
       eventDate: parseDate(map['eventDate'], now),
       dateOfBirth: parseDate(map['dateOfBirth'], now),
       place: map['place'] as String?,
@@ -60,12 +66,16 @@ class BirthdayEntry {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'memberUid': memberUid,
+      if (memberUid != null && memberUid!.isNotEmpty) 'memberUid': memberUid,
       'memberName': memberName,
+      'name': memberName,
+      if (familyNumber != null && familyNumber!.isNotEmpty)
+        'familyNumber': familyNumber,
       'eventDate': Timestamp.fromDate(eventDate),
       'dateOfBirth': Timestamp.fromDate(dateOfBirth),
-      'place': place,
-      'profileImageUrl': profileImageUrl,
+      if (place != null && place!.isNotEmpty) 'place': place,
+      if (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+        'profileImageUrl': profileImageUrl,
     };
   }
 }

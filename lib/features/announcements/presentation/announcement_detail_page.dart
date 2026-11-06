@@ -408,14 +408,16 @@ class _AnnouncementDetailPageState
             const SizedBox(height: AppStyles.space8),
 
             // Publication Metadata & Scheduled Event Timing
-            Row(
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 const Icon(
                   Icons.calendar_today_outlined,
                   size: 14,
                   color: AppColors.textSecondary,
                 ),
-                const SizedBox(width: 6),
                 Text(
                   formattedDate,
                   style: const TextStyle(
@@ -468,14 +470,16 @@ class _AnnouncementDetailPageState
                           : AppColors.primaryBrown,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Scheduled Event: ${a.scheduledDate != null ? DateFormat('EEEE, MMM d, y').format(a.scheduledDate!) : ''} ${a.scheduledTime ?? ''}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: a.announcementType == AnnouncementType.special
-                            ? AppColors.mutedGoldDark
-                            : AppColors.primaryBrown,
+                    Expanded(
+                      child: Text(
+                        'Scheduled Event: ${a.scheduledDate != null ? DateFormat('EEEE, MMM d, y').format(a.scheduledDate!) : ''} ${a.scheduledTime ?? ''}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: a.announcementType == AnnouncementType.special
+                              ? AppColors.mutedGoldDark
+                              : AppColors.primaryBrown,
+                        ),
                       ),
                     ),
                   ],
@@ -584,12 +588,14 @@ class _AnnouncementDetailPageState
                       children: [
                         const Icon(Icons.calendar_month_rounded, color: AppColors.accentWine, size: 20),
                         const SizedBox(width: 8),
-                        Text(
-                          'Marriage Date: ${a.marriageDate != null ? DateFormat('dd MMMM yyyy').format(a.marriageDate!) : "Announced Soon"}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.accentWine,
+                        Expanded(
+                          child: Text(
+                            'Marriage Date: ${a.marriageDate != null ? DateFormat('dd MMMM yyyy').format(a.marriageDate!) : "Announced Soon"}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accentWine,
+                            ),
                           ),
                         ),
                       ],
@@ -634,65 +640,77 @@ class _AnnouncementDetailPageState
 
     return AppCard(
       color: AppColors.surfaceCream,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Icon(
-            Icons.admin_panel_settings_rounded,
-            color: AppColors.primaryBrown,
-            size: 20,
-          ),
-          const SizedBox(width: AppStyles.space8),
-          const Text(
-            'Staff Actions',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primaryBrown,
-            ),
-          ),
-          const Spacer(),
-
-          // Edit Button
-          TextButton.icon(
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Edit'),
-            onPressed: () => showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (_) => AnnouncementFormDialog(
-                initialAnnouncement: a,
+          const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.admin_panel_settings_rounded,
+                color: AppColors.primaryBrown,
+                size: 20,
               ),
-            ).then((val) {
-              if (val == true) {
-                ref.invalidate(
-                  announcementDetailProvider(widget.announcementId),
-                );
-              }
-            }),
+              SizedBox(width: AppStyles.space8),
+              Text(
+                'Staff Actions',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryBrown,
+                ),
+              ),
+            ],
           ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Edit Button
+              TextButton.icon(
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Edit'),
+                onPressed: () => showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => AnnouncementFormDialog(
+                    initialAnnouncement: a,
+                  ),
+                ).then((val) {
+                  if (val == true) {
+                    ref.invalidate(
+                      announcementDetailProvider(widget.announcementId),
+                    );
+                  }
+                }),
+              ),
 
-          // Publish/Unpublish Toggle
-          TextButton.icon(
-            icon: Icon(
-              a.isPublished
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 16,
-            ),
-            label: Text(a.isPublished ? 'Unpublish' : 'Publish'),
-            onPressed: () => _togglePublish(a),
-          ),
+              // Publish/Unpublish Toggle
+              TextButton.icon(
+                icon: Icon(
+                  a.isPublished
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 16,
+                ),
+                label: Text(a.isPublished ? 'Unpublish' : 'Publish'),
+                onPressed: () => _togglePublish(a),
+              ),
 
-          // Delete Button
-          IconButton(
-            tooltip: 'Delete Notice',
-            icon: const Icon(
-              Icons.delete_outline_rounded,
-              color: AppColors.errorRed,
-              size: 20,
-            ),
-            onPressed: () => _showDeleteConfirmation(a),
+              // Delete Button
+              IconButton(
+                tooltip: 'Delete Notice',
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.errorRed,
+                  size: 20,
+                ),
+                onPressed: () => _showDeleteConfirmation(a),
+              ),
+            ],
           ),
         ],
       ),

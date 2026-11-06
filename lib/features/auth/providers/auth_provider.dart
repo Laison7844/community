@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/notification_service.dart';
 import '../data/auth_repository.dart';
 import '../data/member_repository.dart';
 import '../data/storage_repository.dart';
@@ -67,6 +68,8 @@ class AuthNotifier extends Notifier<AuthState> {
           profile: profile,
           isLoading: false,
         );
+        // Automatically sync device FCM token in background
+        _syncFcmToken(uid);
       } else {
         // User is authenticated with Firebase but has no member profile
         state = AuthState(
@@ -144,6 +147,9 @@ class AuthNotifier extends Notifier<AuthState> {
         profile: profile,
         isLoading: false,
       );
+
+      // Automatically register device FCM token with backend
+      _syncFcmToken(user.uid);
 
       return true;
     } catch (e) {
@@ -296,9 +302,25 @@ class AuthNotifier extends Notifier<AuthState> {
   /// Sign out from Firebase Authentication and reset state
   Future<void> signOut() async {
     try {
+      NotificationService.instance.clearSession();
       await _authRepo.signOut();
     } catch (_) {}
     state = AuthState.unauthenticated();
+  }
+
+  /// Silently registers the FCM device token with the backend in the background
+  void _syncFcmToken(String uid) {
+    Future.microtask(() async {
+      try {
+        final idToken = await _authRepo.getIdToken();
+        await NotificationService.instance.registerTokenWithBackend(
+          uid: uid,
+          idToken: idToken,
+        );
+      } catch (_) {
+        // Non-blocking background registration
+      }
+    });
   }
 }
 

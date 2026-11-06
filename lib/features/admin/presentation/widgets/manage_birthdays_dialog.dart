@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
 import '../../../../core/widgets/member_avatar.dart';
-import '../../../auth/models/auth_state.dart';
 import '../../../auth/models/member_profile.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../providers/admin_provider.dart';
@@ -37,6 +36,9 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
 
   List<BirthdayEntry> _birthdays = [];
   List<AnniversaryEntry> _anniversaries = [];
+  String? _originalCreatedBy;
+  String? _originalCreatedByName;
+  DateTime? _originalCreatedAt;
 
   @override
   void initState() {
@@ -73,10 +75,16 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
           _isPublished = week.isPublished;
           _birthdays = List.from(week.birthdays);
           _anniversaries = List.from(week.anniversaries);
+          _originalCreatedBy = week.createdBy;
+          _originalCreatedByName = week.createdByName;
+          _originalCreatedAt = week.createdAt;
         } else {
           _isPublished = false;
           _birthdays = [];
           _anniversaries = [];
+          _originalCreatedBy = null;
+          _originalCreatedByName = null;
+          _originalCreatedAt = null;
         }
       });
     } catch (e) {
@@ -111,8 +119,9 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
       isPublished: _isPublished,
       birthdays: _birthdays,
       anniversaries: _anniversaries,
-      createdBy: staffUid,
-      createdByName: staffName,
+      createdBy: _originalCreatedBy ?? staffUid,
+      createdByName: _originalCreatedByName ?? staffName,
+      createdAt: _originalCreatedAt,
       updatedAt: DateTime.now(),
     );
 
@@ -148,12 +157,12 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
     }
   }
 
-  void _openAddBirthdayDialog(List<MemberProfile> approvedMembers) async {
+  void _openAddBirthdayDialog(List<MemberProfile> directoryMembers) async {
     final entry = await showDialog<BirthdayEntry>(
       context: context,
       barrierDismissible: false,
       builder: (_) => _AddBirthdayDialog(
-        approvedMembers: approvedMembers,
+        directoryMembers: directoryMembers,
         weekMonday: _selectedMonday,
         weekSunday: _selectedSunday,
         existingBirthdays: _birthdays,
@@ -168,12 +177,12 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
     }
   }
 
-  void _openAddAnniversaryDialog(List<MemberProfile> approvedMembers) async {
+  void _openAddAnniversaryDialog(List<MemberProfile> directoryMembers) async {
     final entry = await showDialog<AnniversaryEntry>(
       context: context,
       barrierDismissible: false,
       builder: (_) => _AddAnniversaryDialog(
-        approvedMembers: approvedMembers,
+        directoryMembers: directoryMembers,
         weekMonday: _selectedMonday,
         weekSunday: _selectedSunday,
         existingAnniversaries: _anniversaries,
@@ -191,12 +200,7 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
   @override
   Widget build(BuildContext context) {
     final allMembersAsync = ref.watch(allMembersStreamProvider);
-    final approvedMembers = allMembersAsync.when(
-      data: (list) =>
-          list.where((m) => m.status == MemberStatus.approved).toList(),
-      loading: () => <MemberProfile>[],
-      error: (_, _) => <MemberProfile>[],
-    );
+    final directoryMembers = allMembersAsync.value ?? <MemberProfile>[];
 
     final weekRangeStr =
         '${DateFormat('MMM d').format(_selectedMonday)} – ${DateFormat('MMM d, y').format(_selectedSunday)}';
@@ -256,9 +260,13 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                             const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 1),
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
-                                color: AppColors.subtleOlive.withValues(alpha: 0.15),
+                                color: AppColors.subtleOlive.withValues(
+                                  alpha: 0.15,
+                                ),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
@@ -298,7 +306,9 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                           backgroundColor: AppColors.primaryBrown,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -307,7 +317,7 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                         label: const Text('+ Add Birthday'),
                         onPressed: _isLoading || _errorMessage != null
                             ? null
-                            : () => _openAddBirthdayDialog(approvedMembers),
+                            : () => _openAddBirthdayDialog(directoryMembers),
                       ),
                       const SizedBox(width: 10),
                       ElevatedButton.icon(
@@ -315,7 +325,9 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                           backgroundColor: AppColors.accentWine,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -324,7 +336,7 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                         label: const Text('+ Add Anniversary'),
                         onPressed: _isLoading || _errorMessage != null
                             ? null
-                            : () => _openAddAnniversaryDialog(approvedMembers),
+                            : () => _openAddAnniversaryDialog(directoryMembers),
                       ),
                     ],
                   ),
@@ -382,49 +394,48 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                         ),
                       )
                     : _errorMessage != null
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppStyles.space20),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.error_outline_rounded,
-                                      size: 48, color: AppColors.errorRed),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    _errorMessage!,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: AppColors.errorRed,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  OutlinedButton.icon(
-                                    icon: const Icon(Icons.refresh_rounded),
-                                    label: const Text('Retry'),
-                                    onPressed: _loadWeekData,
-                                  ),
-                                ],
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppStyles.space20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.error_outline_rounded,
+                                size: 48,
+                                color: AppColors.errorRed,
                               ),
-                            ),
-                          )
-                        : _birthdays.isEmpty && _anniversaries.isEmpty
-                            ? _buildCompletelyEmptyBulletinView(approvedMembers)
-                            : Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Left: Birthdays Column
-                                  Expanded(
-                                    child: _buildBirthdaysListColumn(),
-                                  ),
-                                  const VerticalDivider(width: 28),
-                                  // Right: Anniversaries Column
-                                  Expanded(
-                                    child: _buildAnniversariesListColumn(),
-                                  ),
-                                ],
+                              const SizedBox(height: 12),
+                              Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: AppColors.errorRed,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Retry'),
+                                onPressed: _loadWeekData,
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _birthdays.isEmpty && _anniversaries.isEmpty
+                    ? _buildCompletelyEmptyBulletinView(directoryMembers)
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left: Birthdays Column
+                          Expanded(child: _buildBirthdaysListColumn()),
+                          const VerticalDivider(width: 28),
+                          // Right: Anniversaries Column
+                          Expanded(child: _buildAnniversariesListColumn()),
+                        ],
+                      ),
               ),
               const Divider(height: 24),
 
@@ -443,8 +454,9 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                   Row(
                     children: [
                       TextButton(
-                        onPressed:
-                            _isSaving ? null : () => Navigator.pop(context),
+                        onPressed: _isSaving
+                            ? null
+                            : () => Navigator.pop(context),
                         child: const Text('Cancel'),
                       ),
                       const SizedBox(width: AppStyles.space12),
@@ -453,7 +465,9 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                           backgroundColor: AppColors.primaryBrown,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12),
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
                         ),
                         icon: _isSaving
                             ? const SizedBox(
@@ -465,9 +479,11 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                                 ),
                               )
                             : const Icon(Icons.save_rounded, size: 18),
-                        label: Text(_isSaving
-                            ? 'Saving Bulletin...'
-                            : 'Save Weekly Bulletin'),
+                        label: Text(
+                          _isSaving
+                              ? 'Saving Bulletin...'
+                              : 'Save Weekly Bulletin',
+                        ),
                         onPressed: _isSaving ? null : _handleSave,
                       ),
                     ],
@@ -481,7 +497,9 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
     );
   }
 
-  Widget _buildCompletelyEmptyBulletinView(List<MemberProfile> approvedMembers) {
+  Widget _buildCompletelyEmptyBulletinView(
+    List<MemberProfile> directoryMembers,
+  ) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppStyles.space24),
@@ -514,25 +532,34 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
             const Text(
               'Click "+ Add Birthday" or "+ Add Anniversary" above to populate this week\'s parish bulletin.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
             const SizedBox(height: AppStyles.space20),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.cake_rounded, color: AppColors.primaryBrown),
-                  label: const Text('Add Birthday', style: TextStyle(color: AppColors.primaryBrown)),
-                  onPressed: () => _openAddBirthdayDialog(approvedMembers),
+                  icon: const Icon(
+                    Icons.cake_rounded,
+                    color: AppColors.primaryBrown,
+                  ),
+                  label: const Text(
+                    'Add Birthday',
+                    style: TextStyle(color: AppColors.primaryBrown),
+                  ),
+                  onPressed: () => _openAddBirthdayDialog(directoryMembers),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.favorite_rounded, color: AppColors.accentWine),
-                  label: const Text('Add Anniversary', style: TextStyle(color: AppColors.accentWine)),
-                  onPressed: () => _openAddAnniversaryDialog(approvedMembers),
+                  icon: const Icon(
+                    Icons.favorite_rounded,
+                    color: AppColors.accentWine,
+                  ),
+                  label: const Text(
+                    'Add Anniversary',
+                    style: TextStyle(color: AppColors.accentWine),
+                  ),
+                  onPressed: () => _openAddAnniversaryDialog(directoryMembers),
                 ),
               ],
             ),
@@ -548,8 +575,11 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
       children: [
         Row(
           children: [
-            const Icon(Icons.cake_rounded,
-                size: 18, color: AppColors.primaryBrown),
+            const Icon(
+              Icons.cake_rounded,
+              size: 18,
+              color: AppColors.primaryBrown,
+            ),
             const SizedBox(width: 8),
             const Text(
               'Weekly Birthdays',
@@ -591,43 +621,51 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                   child: const Text(
                     'No birthdays added yet.',
                     style: TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary),
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 )
               : ListView.builder(
                   itemCount: _birthdays.length,
                   itemBuilder: (context, i) {
                     final b = _birthdays[i];
-                    return Card(
+                    return Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: AppColors.softBeige),
-                      ),
-                      child: ListTile(
-                        dense: true,
-                        leading: MemberAvatar(
-                          imageUrl: b.profileImageUrl,
-                          radius: 18,
+                      child: Material(
+                        color: AppColors.cardSurface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: const BorderSide(color: AppColors.softBeige),
                         ),
-                        title: Text(
-                          b.memberName,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          '${DateFormat('d MMM').format(b.eventDate)} • Age ${b.calculatedAge}${b.place != null && b.place!.isNotEmpty ? " • ${b.place}" : ""}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        trailing: IconButton(
-                          tooltip: 'Remove',
-                          icon: const Icon(Icons.delete_outline_rounded,
-                              size: 18, color: AppColors.errorRed),
-                          onPressed: () {
-                            setState(() {
-                              _birthdays.removeAt(i);
-                            });
-                          },
+                        clipBehavior: Clip.antiAlias,
+                        child: ListTile(
+                          dense: true,
+                          leading: MemberAvatar(
+                            imageUrl: b.profileImageUrl,
+                            radius: 18,
+                          ),
+                          title: Text(
+                            b.memberName,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            '${DateFormat('d MMM').format(b.eventDate)} • Age ${b.calculatedAge}${b.place != null && b.place!.isNotEmpty ? " • ${b.place}" : ""}${b.familyNumber != null && b.familyNumber!.isNotEmpty ? " • #${b.familyNumber}" : ""}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: IconButton(
+                            tooltip: 'Remove',
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                              color: AppColors.errorRed,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _birthdays.removeAt(i);
+                              });
+                            },
+                          ),
                         ),
                       ),
                     );
@@ -644,8 +682,11 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
       children: [
         Row(
           children: [
-            const Icon(Icons.favorite_rounded,
-                size: 18, color: AppColors.accentWine),
+            const Icon(
+              Icons.favorite_rounded,
+              size: 18,
+              color: AppColors.accentWine,
+            ),
             const SizedBox(width: 8),
             const Text(
               'Weekly Wedding Anniversaries',
@@ -687,44 +728,52 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
                   child: const Text(
                     'No wedding anniversaries added yet.',
                     style: TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary),
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 )
               : ListView.builder(
                   itemCount: _anniversaries.length,
                   itemBuilder: (context, i) {
                     final a = _anniversaries[i];
-                    return Card(
+                    return Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: AppColors.softBeige),
-                      ),
-                      child: ListTile(
-                        dense: true,
-                        leading: MemberAvatar(
-                          imageUrl: a.profileImageUrl,
-                          radius: 18,
-                          iconColor: AppColors.accentWine,
+                      child: Material(
+                        color: AppColors.cardSurface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: const BorderSide(color: AppColors.softBeige),
                         ),
-                        title: Text(
-                          a.coupleName,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          '${DateFormat('d MMM').format(a.eventDate)} • ${a.formattedAnniversaryOrdinal}${a.place != null && a.place!.isNotEmpty ? " • ${a.place}" : ""}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        trailing: IconButton(
-                          tooltip: 'Remove',
-                          icon: const Icon(Icons.delete_outline_rounded,
-                              size: 18, color: AppColors.errorRed),
-                          onPressed: () {
-                            setState(() {
-                              _anniversaries.removeAt(i);
-                            });
-                          },
+                        clipBehavior: Clip.antiAlias,
+                        child: ListTile(
+                          dense: true,
+                          leading: MemberAvatar(
+                            imageUrl: a.profileImageUrl,
+                            radius: 18,
+                            iconColor: AppColors.accentWine,
+                          ),
+                          title: Text(
+                            a.coupleName,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            '${DateFormat('d MMM').format(a.eventDate)} • ${a.formattedAnniversaryOrdinal}${a.place != null && a.place!.isNotEmpty ? " • ${a.place}" : ""}${a.familyNumber != null && a.familyNumber!.isNotEmpty ? " • #${a.familyNumber}" : ""}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: IconButton(
+                            tooltip: 'Remove',
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                              color: AppColors.errorRed,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _anniversaries.removeAt(i);
+                              });
+                            },
+                          ),
                         ),
                       ),
                     );
@@ -735,19 +784,18 @@ class _ManageBirthdaysDialogState extends ConsumerState<ManageBirthdaysDialog> {
     );
   }
 }
-
 // ============================================================================
-// DEDICATED ADD BIRTHDAY DIALOG WITH SEARCHABLE MEMBER SELECTOR
+// DEDICATED ADD BIRTHDAY DIALOG
 // ============================================================================
 
 class _AddBirthdayDialog extends StatefulWidget {
-  final List<MemberProfile> approvedMembers;
+  final List<MemberProfile> directoryMembers;
   final DateTime weekMonday;
   final DateTime weekSunday;
   final List<BirthdayEntry> existingBirthdays;
 
   const _AddBirthdayDialog({
-    required this.approvedMembers,
+    required this.directoryMembers,
     required this.weekMonday,
     required this.weekSunday,
     required this.existingBirthdays,
@@ -759,51 +807,102 @@ class _AddBirthdayDialog extends StatefulWidget {
 
 class _AddBirthdayDialogState extends State<_AddBirthdayDialog> {
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _familyNumberController = TextEditingController();
+  final TextEditingController _placeController = TextEditingController();
+
   String _searchQuery = '';
-  MemberProfile? _selectedMember;
-  DateTime? _selectedOccurrenceDate;
+  DateTime? _selectedDob;
+  String? _selectedMemberUid;
+  String? _profileImageUrl;
 
   @override
   void dispose() {
     _searchController.dispose();
+    _nameController.dispose();
+    _familyNumberController.dispose();
+    _placeController.dispose();
     super.dispose();
+  }
+
+  /// Calculates birthday occurrence within current bulletin week
+  DateTime? _calculateOccurrence(DateTime dob) {
+    final candidate1 = DateTime(widget.weekMonday.year, dob.month, dob.day);
+    if (!candidate1.isBefore(widget.weekMonday) &&
+        !candidate1.isAfter(widget.weekSunday)) {
+      return candidate1;
+    }
+    if (widget.weekSunday.year != widget.weekMonday.year) {
+      final candidate2 = DateTime(widget.weekSunday.year, dob.month, dob.day);
+      if (!candidate2.isBefore(widget.weekMonday) &&
+          !candidate2.isAfter(widget.weekSunday)) {
+        return candidate2;
+      }
+    }
+    return null;
+  }
+
+  int? _calculateAge(DateTime dob, DateTime occurrence) {
+    int age = occurrence.year - dob.year;
+    return age >= 0 ? age : 0;
   }
 
   void _onMemberSelected(MemberProfile member) {
     setState(() {
-      _selectedMember = member;
+      _nameController.text = member.fullName;
+      _familyNumberController.text = member.familyNumber;
+      _placeController.text = member.place ?? member.familyInfo ?? '';
+      _selectedMemberUid = member.uid.isNotEmpty ? member.uid : null;
+      _profileImageUrl = member.profileImageUrl;
 
-      // Calculate occurrence date within current week Monday..Sunday
       if (member.dateOfBirth != null) {
-        final dob = member.dateOfBirth!;
-        final occurrenceCandidate =
-            DateTime(widget.weekMonday.year, dob.month, dob.day);
-        if (!occurrenceCandidate.isBefore(widget.weekMonday) &&
-            !occurrenceCandidate.isAfter(widget.weekSunday)) {
-          _selectedOccurrenceDate = occurrenceCandidate;
-        } else {
-          _selectedOccurrenceDate = widget.weekMonday;
-        }
-      } else {
-        _selectedOccurrenceDate = widget.weekMonday;
+        _selectedDob = member.dateOfBirth;
       }
+
+      _searchQuery = '';
+      _searchController.clear();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final query = _searchQuery.trim().toLowerCase();
-    final matchingMembers = widget.approvedMembers.where((m) {
-      if (query.isEmpty) return true;
-      final nameMatches = m.fullName.toLowerCase().contains(query);
-      final familyMatches = m.familyNumber.toLowerCase().contains(query);
-      return nameMatches || familyMatches;
-    }).toList();
+    final matchingMembers = query.isEmpty
+        ? <MemberProfile>[]
+        : widget.directoryMembers
+              .where((m) {
+                final nameMatches = m.fullName.toLowerCase().contains(query);
+                final familyMatches = m.familyNumber.toLowerCase().contains(
+                  query,
+                );
+                return nameMatches || familyMatches;
+              })
+              .take(6)
+              .toList();
 
-    final isAlreadyAdded = _selectedMember != null &&
-        widget.existingBirthdays.any((b) => b.memberUid == _selectedMember!.uid);
+    final nameTrimmed = _nameController.text.trim();
+    final occurrence = _selectedDob != null
+        ? _calculateOccurrence(_selectedDob!)
+        : null;
+    final isBirthdayInCurrentWeek = _selectedDob != null && occurrence != null;
 
-    final calculatedAge = _selectedMember?.calculateAge(_selectedOccurrenceDate);
+    final isAlreadyAdded =
+        nameTrimmed.isNotEmpty &&
+        widget.existingBirthdays.any((b) {
+          final matchUid =
+              _selectedMemberUid != null &&
+              _selectedMemberUid!.isNotEmpty &&
+              b.memberUid == _selectedMemberUid;
+          final matchName =
+              b.memberName.trim().toLowerCase() == nameTrimmed.toLowerCase();
+          return matchUid || matchName;
+        });
+
+    final canSave =
+        nameTrimmed.isNotEmpty &&
+        _selectedDob != null &&
+        isBirthdayInCurrentWeek &&
+        !isAlreadyAdded;
 
     return Dialog(
       backgroundColor: AppColors.cardSurface,
@@ -812,7 +911,7 @@ class _AddBirthdayDialogState extends State<_AddBirthdayDialog> {
       ),
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 580, maxHeight: 660),
+        constraints: const BoxConstraints(maxWidth: 540, maxHeight: 700),
         child: Padding(
           padding: const EdgeInsets.all(AppStyles.space20),
           child: Column(
@@ -820,25 +919,14 @@ class _AddBirthdayDialogState extends State<_AddBirthdayDialog> {
             children: [
               // Header
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBrown.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.cake_rounded,
-                        color: AppColors.primaryBrown, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Add Birthday to Bulletin',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryBrown,
-                      ),
+                  const Text(
+                    'Add Birthday',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryBrown,
                     ),
                   ),
                   IconButton(
@@ -847,237 +935,339 @@ class _AddBirthdayDialogState extends State<_AddBirthdayDialog> {
                   ),
                 ],
               ),
-              const Divider(height: 20),
+              const Divider(height: 16),
 
-              // Search Input
-              TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: 'Search member',
-                  hintText: 'Enter family number or member name...',
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {
-                              _searchQuery = '';
-                            });
-                          },
-                        )
-                      : null,
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onChanged: (val) {
-                  setState(() {
-                    _searchQuery = val;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // Results List (Scrollable)
+              // Form Body
               Expanded(
-                child: matchingMembers.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No approved members found matching "$_searchQuery"',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: matchingMembers.length,
-                        itemBuilder: (context, index) {
-                          final m = matchingMembers[index];
-                          final isSelected = _selectedMember?.uid == m.uid;
-                          final existsInWeek = widget.existingBirthdays
-                              .any((b) => b.memberUid == m.uid);
-
-                          final dobStr = m.dateOfBirth != null
-                              ? DateFormat('d MMM').format(m.dateOfBirth!)
-                              : 'Not set';
-                          final placeStr = m.place ?? m.familyInfo ?? '—';
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 6),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primaryBrown.withValues(alpha: 0.08)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.primaryBrown
-                                    : AppColors.softBeige,
-                                width: isSelected ? 1.5 : 1.0,
-                              ),
-                            ),
-                            child: ListTile(
-                              dense: true,
-                              onTap: () => _onMemberSelected(m),
-                              leading: MemberAvatar(
-                                imageUrl: m.profileImageUrl,
-                                radius: 18,
-                              ),
-                              title: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      m.fullName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                  if (existsInWeek)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.errorRed.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text(
-                                        'Already added',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.errorRed,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              subtitle: Text(
-                                'Family No: ${m.familyNumber} • Birthday: $dobStr • Place: $placeStr',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              trailing: Icon(
-                                isSelected
-                                    ? Icons.check_circle_rounded
-                                    : Icons.radio_button_unchecked_rounded,
-                                color: isSelected
-                                    ? AppColors.primaryBrown
-                                    : Colors.grey.shade400,
-                                size: 20,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-
-              // Selected Details Panel
-              if (_selectedMember != null) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isAlreadyAdded
-                        ? AppColors.errorRed.withValues(alpha: 0.06)
-                        : AppColors.backgroundIvory,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isAlreadyAdded
-                          ? AppColors.errorRed.withValues(alpha: 0.3)
-                          : AppColors.softBeige,
-                    ),
-                  ),
+                child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (isAlreadyAdded) ...[
-                        Row(
-                          children: [
-                            const Icon(Icons.warning_amber_rounded,
-                                size: 16, color: AppColors.errorRed),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                '${_selectedMember!.fullName} is already in this week\'s birthday bulletin.',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.errorRed,
+                      // Search church directory (optional, visually secondary)
+                      TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          labelText: 'Search existing church person (optional)',
+                          hintText: 'Search by name or family number',
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            size: 20,
+                          ),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setState(() {
+                            _searchQuery = val;
+                          });
+                        },
+                      ),
+
+                      if (_searchQuery.trim().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        if (matchingMembers.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 6),
+                            child: Text(
+                              'No matching church records found.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          )
+                        else
+                          ...matchingMembers.map((m) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              child: Material(
+                                color: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(
+                                    color: AppColors.softBeige,
+                                  ),
                                 ),
+                                clipBehavior: Clip.antiAlias,
+                                child: ListTile(
+                                  dense: true,
+                                  onTap: () => _onMemberSelected(m),
+                                  leading: MemberAvatar(
+                                    imageUrl: m.profileImageUrl,
+                                    radius: 18,
+                                  ),
+                                  title: Text(
+                                    m.fullName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    'Family No: ${m.familyNumber}${m.dateOfBirth != null ? " • ${DateFormat('d MMM yyyy').format(m.dateOfBirth!)}" : ""}${m.place != null && m.place!.isNotEmpty ? " • ${m.place}" : ""}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        const Divider(height: 16),
+                      ] else
+                        const SizedBox(height: 14),
+
+                      // Person Name *
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Person Name *',
+                          hintText: 'Enter name',
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Family Number (optional)
+                      TextFormField(
+                        controller: _familyNumberController,
+                        decoration: InputDecoration(
+                          labelText: 'Family Number',
+                          hintText: 'Enter family number (optional)',
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Date of Birth *
+                      InkWell(
+                        onTap: () async {
+                          final initial =
+                              _selectedDob ??
+                              DateTime(
+                                1995,
+                                DateTime.now().month,
+                                DateTime.now().day,
+                              );
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: initial,
+                            firstDate: DateTime(1900),
+                            lastDate: DateTime.now(),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              _selectedDob = picked;
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Date of Birth *',
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            suffixIcon: const Icon(
+                              Icons.calendar_month_rounded,
+                              size: 20,
+                              color: AppColors.primaryBrown,
+                            ),
+                          ),
+                          child: Text(
+                            _selectedDob != null
+                                ? DateFormat(
+                                    'd MMMM yyyy',
+                                  ).format(_selectedDob!)
+                                : 'Select date',
+                            style: TextStyle(
+                              color: _selectedDob != null
+                                  ? AppColors.textPrimary
+                                  : AppColors.textSecondary,
+                              fontSize: 14,
+                              fontWeight: _selectedDob != null
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Place (optional)
+                      TextFormField(
+                        controller: _placeController,
+                        decoration: InputDecoration(
+                          labelText: 'Place',
+                          hintText: 'Enter place (optional)',
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Bulletin summary box
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.backgroundIvory,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.softBeige),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Birthday in bulletin:',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              occurrence != null
+                                  ? DateFormat('EEEE, d MMM').format(occurrence)
+                                  : (_selectedDob != null
+                                        ? 'Not in current week'
+                                        : 'Select date of birth'),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: occurrence != null
+                                    ? AppColors.primaryBrown
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Age:',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _selectedDob != null && occurrence != null
+                                  ? '${_calculateAge(_selectedDob!, occurrence)} years'
+                                  : 'Automatically calculated',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    _selectedDob != null && occurrence != null
+                                    ? AppColors.subtleOlive
+                                    : AppColors.textSecondary,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                      ],
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Calculated Age: ${calculatedAge != null ? "$calculatedAge years" : "N/A"}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.primaryBrown,
-                                  ),
-                                ),
-                                Text(
-                                  'Place: ${_selectedMember!.place ?? _selectedMember!.familyInfo ?? "Parish"}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
+                      ),
+
+                      // Validation Warnings
+                      if (_selectedDob != null && !isBirthdayInCurrentWeek) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.errorRed.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppColors.errorRed.withValues(alpha: 0.3),
                             ),
                           ),
-                          Row(
+                          child: Row(
                             children: [
-                              Text(
-                                _selectedOccurrenceDate != null
-                                    ? DateFormat('EEE, d MMM').format(_selectedOccurrenceDate!)
-                                    : 'Pick Date',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                size: 18,
+                                color: AppColors.errorRed,
                               ),
-                              IconButton(
-                                tooltip: 'Select occurrence date in week',
-                                icon: const Icon(Icons.calendar_today_rounded,
-                                    size: 18, color: AppColors.primaryBrown),
-                                onPressed: () async {
-                                  final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: _selectedOccurrenceDate ?? widget.weekMonday,
-                                    firstDate: widget.weekMonday,
-                                    lastDate: widget.weekSunday,
-                                  );
-                                  if (picked != null) {
-                                    setState(() {
-                                      _selectedOccurrenceDate = picked;
-                                    });
-                                  }
-                                },
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Birthday (${DateFormat('d MMMM').format(_selectedDob!)}) is outside the current bulletin week (${DateFormat('d MMM').format(widget.weekMonday)} – ${DateFormat('d MMM').format(widget.weekSunday)}).",
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.errorRed,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
+
+                      if (isAlreadyAdded) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.errorRed.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppColors.errorRed.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                size: 18,
+                                color: AppColors.errorRed,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${_nameController.text.trim()} is already added for this week.',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.errorRed,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-              ],
+              ),
 
-              const Divider(height: 24),
+              const Divider(height: 20),
 
               // Actions
               Row(
@@ -1093,25 +1283,26 @@ class _AddBirthdayDialogState extends State<_AddBirthdayDialog> {
                       backgroundColor: AppColors.primaryBrown,
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: _selectedMember == null || isAlreadyAdded
-                        ? null
-                        : () {
-                            final m = _selectedMember!;
-                            final eventDate =
-                                _selectedOccurrenceDate ?? widget.weekMonday;
-                            final birthDate = m.dateOfBirth ?? DateTime(2000, 1, 1);
-
+                    onPressed: canSave
+                        ? () {
                             final entry = BirthdayEntry(
-                              id: 'bday_${m.uid}_${eventDate.millisecondsSinceEpoch}',
-                              memberUid: m.uid,
-                              memberName: m.fullName,
-                              eventDate: eventDate,
-                              dateOfBirth: birthDate,
-                              place: m.place ?? m.familyInfo,
-                              profileImageUrl: m.profileImageUrl,
+                              id: 'bday_${DateTime.now().millisecondsSinceEpoch}_${_nameController.text.hashCode.abs()}',
+                              memberUid: _selectedMemberUid,
+                              memberName: _nameController.text.trim(),
+                              familyNumber:
+                                  _familyNumberController.text.trim().isNotEmpty
+                                  ? _familyNumberController.text.trim()
+                                  : null,
+                              eventDate: occurrence,
+                              dateOfBirth: _selectedDob!,
+                              place: _placeController.text.trim().isNotEmpty
+                                  ? _placeController.text.trim()
+                                  : null,
+                              profileImageUrl: _profileImageUrl,
                             );
                             Navigator.pop(context, entry);
-                          },
+                          }
+                        : null,
                     child: const Text('Add Birthday'),
                   ),
                 ],
@@ -1125,17 +1316,17 @@ class _AddBirthdayDialogState extends State<_AddBirthdayDialog> {
 }
 
 // ============================================================================
-// DEDICATED ADD ANNIVERSARY DIALOG WITH SEARCHABLE COUPLE SELECTOR
+// DEDICATED ADD ANNIVERSARY DIALOG
 // ============================================================================
 
 class _AddAnniversaryDialog extends StatefulWidget {
-  final List<MemberProfile> approvedMembers;
+  final List<MemberProfile> directoryMembers;
   final DateTime weekMonday;
   final DateTime weekSunday;
   final List<AnniversaryEntry> existingAnniversaries;
 
   const _AddAnniversaryDialog({
-    required this.approvedMembers,
+    required this.directoryMembers,
     required this.weekMonday,
     required this.weekSunday,
     required this.existingAnniversaries,
@@ -1148,63 +1339,140 @@ class _AddAnniversaryDialog extends StatefulWidget {
 class _AddAnniversaryDialogState extends State<_AddAnniversaryDialog> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _coupleNameController = TextEditingController();
+  final TextEditingController _brideNameController = TextEditingController();
+  final TextEditingController _groomNameController = TextEditingController();
+  final TextEditingController _familyNumberController = TextEditingController();
+  final TextEditingController _placeController = TextEditingController();
+
   String _searchQuery = '';
-  MemberProfile? _selectedMember;
-  DateTime? _selectedOccurrenceDate;
+  DateTime? _selectedWeddingDate;
+  String? _selectedMemberUid;
+  String? _selectedSpouseUid;
+  String? _profileImageUrl;
 
   @override
   void dispose() {
     _searchController.dispose();
     _coupleNameController.dispose();
+    _brideNameController.dispose();
+    _groomNameController.dispose();
+    _familyNumberController.dispose();
+    _placeController.dispose();
     super.dispose();
+  }
+
+  /// Calculates anniversary occurrence within current bulletin week
+  DateTime? _calculateOccurrence(DateTime weddingDate) {
+    final candidate1 = DateTime(
+      widget.weekMonday.year,
+      weddingDate.month,
+      weddingDate.day,
+    );
+    if (!candidate1.isBefore(widget.weekMonday) &&
+        !candidate1.isAfter(widget.weekSunday)) {
+      return candidate1;
+    }
+    if (widget.weekSunday.year != widget.weekMonday.year) {
+      final candidate2 = DateTime(
+        widget.weekSunday.year,
+        weddingDate.month,
+        weddingDate.day,
+      );
+      if (!candidate2.isBefore(widget.weekMonday) &&
+          !candidate2.isAfter(widget.weekSunday)) {
+        return candidate2;
+      }
+    }
+    return null;
+  }
+
+  int? _calculateYears(DateTime weddingDate, DateTime occurrence) {
+    int years = occurrence.year - weddingDate.year;
+    return years >= 0 ? years : 0;
+  }
+
+  String _formatAnniversaryOrdinal(int count) {
+    if (count <= 0) return 'Wedding Anniversary';
+    final remainder10 = count % 10;
+    final remainder100 = count % 100;
+    String suffix = 'th';
+    if (remainder100 < 11 || remainder100 > 13) {
+      if (remainder10 == 1) suffix = 'st';
+      if (remainder10 == 2) suffix = 'nd';
+      if (remainder10 == 3) suffix = 'rd';
+    }
+    return '$count$suffix Anniversary ($count years)';
   }
 
   void _onMemberSelected(MemberProfile member) {
     setState(() {
-      _selectedMember = member;
-
-      // Populate couple name (editable)
-      if (member.spouseName != null && member.spouseName!.isNotEmpty) {
-        _coupleNameController.text =
-            '${member.fullName} & ${member.spouseName}';
+      final spouse = member.spouseName ?? '';
+      if (spouse.isNotEmpty) {
+        _coupleNameController.text = '${member.fullName} & $spouse';
+        _brideNameController.text = spouse;
+        _groomNameController.text = member.fullName;
       } else {
         _coupleNameController.text = '${member.fullName} & Spouse';
+        _groomNameController.text = member.fullName;
+      }
+      _familyNumberController.text = member.familyNumber;
+      _placeController.text = member.place ?? member.familyInfo ?? '';
+      _selectedMemberUid = member.uid.isNotEmpty ? member.uid : null;
+      _selectedSpouseUid = member.spouseUid;
+      _profileImageUrl = member.profileImageUrl;
+
+      if (member.weddingAnniversary != null) {
+        _selectedWeddingDate = member.weddingAnniversary;
       }
 
-      // Calculate occurrence date within current week Monday..Sunday
-      if (member.weddingAnniversary != null) {
-        final w = member.weddingAnniversary!;
-        final occurrenceCandidate =
-            DateTime(widget.weekMonday.year, w.month, w.day);
-        if (!occurrenceCandidate.isBefore(widget.weekMonday) &&
-            !occurrenceCandidate.isAfter(widget.weekSunday)) {
-          _selectedOccurrenceDate = occurrenceCandidate;
-        } else {
-          _selectedOccurrenceDate = widget.weekMonday;
-        }
-      } else {
-        _selectedOccurrenceDate = widget.weekMonday;
-      }
+      _searchQuery = '';
+      _searchController.clear();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final query = _searchQuery.trim().toLowerCase();
-    final matchingMembers = widget.approvedMembers.where((m) {
-      if (query.isEmpty) return true;
-      final nameMatches = m.fullName.toLowerCase().contains(query);
-      final spouseMatches =
-          (m.spouseName ?? '').toLowerCase().contains(query);
-      final familyMatches = m.familyNumber.toLowerCase().contains(query);
-      return nameMatches || spouseMatches || familyMatches;
-    }).toList();
+    final matchingMembers = query.isEmpty
+        ? <MemberProfile>[]
+        : widget.directoryMembers
+              .where((m) {
+                final nameMatches = m.fullName.toLowerCase().contains(query);
+                final spouseMatches = (m.spouseName ?? '')
+                    .toLowerCase()
+                    .contains(query);
+                final familyMatches = m.familyNumber.toLowerCase().contains(
+                  query,
+                );
+                return nameMatches || spouseMatches || familyMatches;
+              })
+              .take(6)
+              .toList();
 
-    final isAlreadyAdded = _selectedMember != null &&
-        widget.existingAnniversaries.any((a) => a.memberUid == _selectedMember!.uid);
+    final coupleTrimmed = _coupleNameController.text.trim();
+    final occurrence = _selectedWeddingDate != null
+        ? _calculateOccurrence(_selectedWeddingDate!)
+        : null;
+    final isAnniversaryInCurrentWeek =
+        _selectedWeddingDate != null && occurrence != null;
 
-    final calculatedYears =
-        _selectedMember?.calculateAnniversaryYears(_selectedOccurrenceDate);
+    final isAlreadyAdded =
+        coupleTrimmed.isNotEmpty &&
+        widget.existingAnniversaries.any((a) {
+          final matchUid =
+              _selectedMemberUid != null &&
+              _selectedMemberUid!.isNotEmpty &&
+              a.memberUid == _selectedMemberUid;
+          final matchCouple =
+              a.coupleName.trim().toLowerCase() == coupleTrimmed.toLowerCase();
+          return matchUid || matchCouple;
+        });
+
+    final canSave =
+        coupleTrimmed.isNotEmpty &&
+        _selectedWeddingDate != null &&
+        isAnniversaryInCurrentWeek &&
+        !isAlreadyAdded;
 
     return Dialog(
       backgroundColor: AppColors.cardSurface,
@@ -1213,7 +1481,7 @@ class _AddAnniversaryDialogState extends State<_AddAnniversaryDialog> {
       ),
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 580, maxHeight: 680),
+        constraints: const BoxConstraints(maxWidth: 540, maxHeight: 720),
         child: Padding(
           padding: const EdgeInsets.all(AppStyles.space20),
           child: Column(
@@ -1221,25 +1489,14 @@ class _AddAnniversaryDialogState extends State<_AddAnniversaryDialog> {
             children: [
               // Header
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.accentWine.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.favorite_rounded,
-                        color: AppColors.accentWine, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Add Wedding Anniversary to Bulletin',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accentWine,
-                      ),
+                  const Text(
+                    'Add Anniversary',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accentWine,
                     ),
                   ),
                   IconButton(
@@ -1248,256 +1505,380 @@ class _AddAnniversaryDialogState extends State<_AddAnniversaryDialog> {
                   ),
                 ],
               ),
-              const Divider(height: 20),
+              const Divider(height: 16),
 
-              // Search Input
-              TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: 'Search couple / member',
-                  hintText: 'Enter family number or member name...',
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {
-                              _searchQuery = '';
-                            });
-                          },
-                        )
-                      : null,
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onChanged: (val) {
-                  setState(() {
-                    _searchQuery = val;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // Results List (Scrollable)
+              // Form Body
               Expanded(
-                child: matchingMembers.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No approved members found matching "$_searchQuery"',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: matchingMembers.length,
-                        itemBuilder: (context, index) {
-                          final m = matchingMembers[index];
-                          final isSelected = _selectedMember?.uid == m.uid;
-                          final existsInWeek = widget.existingAnniversaries
-                              .any((a) => a.memberUid == m.uid);
-
-                          final annivStr = m.weddingAnniversary != null
-                              ? DateFormat('d MMM').format(m.weddingAnniversary!)
-                              : 'Not set';
-                          final spouseStr = m.spouseName != null ? ' & ${m.spouseName}' : '';
-                          final placeStr = m.place ?? m.familyInfo ?? '—';
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 6),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.accentWine.withValues(alpha: 0.08)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.accentWine
-                                    : AppColors.softBeige,
-                                width: isSelected ? 1.5 : 1.0,
-                              ),
-                            ),
-                            child: ListTile(
-                              dense: true,
-                              onTap: () => _onMemberSelected(m),
-                              leading: MemberAvatar(
-                                imageUrl: m.profileImageUrl,
-                                radius: 18,
-                                iconColor: AppColors.accentWine,
-                              ),
-                              title: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '${m.fullName}$spouseStr',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                  if (existsInWeek)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.errorRed.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text(
-                                        'Already added',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.errorRed,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              subtitle: Text(
-                                'Family No: ${m.familyNumber} • Anniversary: $annivStr • Place: $placeStr',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              trailing: Icon(
-                                isSelected
-                                    ? Icons.check_circle_rounded
-                                    : Icons.radio_button_unchecked_rounded,
-                                color: isSelected
-                                    ? AppColors.accentWine
-                                    : Colors.grey.shade400,
-                                size: 20,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-
-              // Selected Details & Editable Couple Display Name
-              if (_selectedMember != null) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isAlreadyAdded
-                        ? AppColors.errorRed.withValues(alpha: 0.06)
-                        : AppColors.backgroundIvory,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isAlreadyAdded
-                          ? AppColors.errorRed.withValues(alpha: 0.3)
-                          : AppColors.softBeige,
-                    ),
-                  ),
+                child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (isAlreadyAdded) ...[
-                        Row(
-                          children: [
-                            const Icon(Icons.warning_amber_rounded,
-                                size: 16, color: AppColors.errorRed),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Anniversary for ${_selectedMember!.fullName} is already in this week\'s bulletin.',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.errorRed,
+                      // Search church directory (optional, visually secondary)
+                      TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          labelText: 'Search existing church couple (optional)',
+                          hintText: 'Search by spouse names or family number',
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            size: 20,
+                          ),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setState(() {
+                            _searchQuery = val;
+                          });
+                        },
+                      ),
+
+                      if (_searchQuery.trim().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        if (matchingMembers.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 6),
+                            child: Text(
+                              'No matching church records found.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          )
+                        else
+                          ...matchingMembers.map((m) {
+                            final spouseStr =
+                                m.spouseName != null && m.spouseName!.isNotEmpty
+                                ? ' & ${m.spouseName}'
+                                : '';
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              child: Material(
+                                color: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(
+                                    color: AppColors.softBeige,
+                                  ),
                                 ),
+                                clipBehavior: Clip.antiAlias,
+                                child: ListTile(
+                                  dense: true,
+                                  onTap: () => _onMemberSelected(m),
+                                  leading: MemberAvatar(
+                                    imageUrl: m.profileImageUrl,
+                                    radius: 18,
+                                    iconColor: AppColors.accentWine,
+                                  ),
+                                  title: Text(
+                                    '${m.fullName}$spouseStr',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    'Family No: ${m.familyNumber}${m.weddingAnniversary != null ? " • ${DateFormat('d MMM yyyy').format(m.weddingAnniversary!)}" : ""}${m.place != null && m.place!.isNotEmpty ? " • ${m.place}" : ""}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        const Divider(height: 16),
+                      ] else
+                        const SizedBox(height: 14),
+
+                      // Couple Display Name *
+                      TextFormField(
+                        controller: _coupleNameController,
+                        decoration: InputDecoration(
+                          labelText: 'Couple Display Name *',
+                          hintText: 'e.g. John & Mary',
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Wedding Date *
+                      InkWell(
+                        onTap: () async {
+                          final initial =
+                              _selectedWeddingDate ?? DateTime(2000, 1, 1);
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: initial,
+                            firstDate: DateTime(1900),
+                            lastDate: DateTime.now(),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              _selectedWeddingDate = picked;
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Wedding Date *',
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            suffixIcon: const Icon(
+                              Icons.calendar_month_rounded,
+                              size: 20,
+                              color: AppColors.accentWine,
+                            ),
+                          ),
+                          child: Text(
+                            _selectedWeddingDate != null
+                                ? DateFormat(
+                                    'd MMMM yyyy',
+                                  ).format(_selectedWeddingDate!)
+                                : 'Select date',
+                            style: TextStyle(
+                              color: _selectedWeddingDate != null
+                                  ? AppColors.textPrimary
+                                  : AppColors.textSecondary,
+                              fontSize: 14,
+                              fontWeight: _selectedWeddingDate != null
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Family Number (optional)
+                      TextFormField(
+                        controller: _familyNumberController,
+                        decoration: InputDecoration(
+                          labelText: 'Family Number',
+                          hintText: 'Enter family number (optional)',
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Place (optional)
+                      TextFormField(
+                        controller: _placeController,
+                        decoration: InputDecoration(
+                          labelText: 'Place',
+                          hintText: 'Enter place (optional)',
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Spouse Names (optional)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _brideNameController,
+                              decoration: InputDecoration(
+                                labelText: 'Bride Name',
+                                hintText: 'optional',
+                                isDense: true,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _groomNameController,
+                              decoration: InputDecoration(
+                                labelText: 'Groom Name',
+                                hintText: 'optional',
+                                isDense: true,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Bulletin summary box
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.backgroundIvory,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.softBeige),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Anniversary in bulletin:',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              occurrence != null
+                                  ? DateFormat('EEEE, d MMM').format(occurrence)
+                                  : (_selectedWeddingDate != null
+                                        ? 'Not in current week'
+                                        : 'Select wedding date'),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: occurrence != null
+                                    ? AppColors.accentWine
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Anniversary:',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _selectedWeddingDate != null && occurrence != null
+                                  ? _formatAnniversaryOrdinal(
+                                      _calculateYears(
+                                        _selectedWeddingDate!,
+                                        occurrence,
+                                      )!,
+                                    )
+                                  : 'Automatically calculated',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    _selectedWeddingDate != null &&
+                                        occurrence != null
+                                    ? AppColors.subtleOlive
+                                    : AppColors.textSecondary,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                      ],
-
-                      // Couple Display Name (Editable as required by Part 2E)
-                      TextField(
-                        controller: _coupleNameController,
-                        decoration: InputDecoration(
-                          labelText: 'Couple Display Name (e.g. John & Mary)',
-                          hintText: 'Enter couple names for bulletin card...',
-                          isDense: true,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 8),
 
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Calculated Anniversary: ${calculatedYears != null ? "$calculatedYears years" : "N/A"}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.accentWine,
-                                  ),
-                                ),
-                                Text(
-                                  'Place: ${_selectedMember!.place ?? _selectedMember!.familyInfo ?? "Parish"}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
+                      // Validation Warnings
+                      if (_selectedWeddingDate != null &&
+                          !isAnniversaryInCurrentWeek) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.errorRed.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppColors.errorRed.withValues(alpha: 0.3),
                             ),
                           ),
-                          Row(
+                          child: Row(
                             children: [
-                              Text(
-                                _selectedOccurrenceDate != null
-                                    ? DateFormat('EEE, d MMM').format(_selectedOccurrenceDate!)
-                                    : 'Pick Date',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                size: 18,
+                                color: AppColors.errorRed,
                               ),
-                              IconButton(
-                                tooltip: 'Select occurrence date in week',
-                                icon: const Icon(Icons.calendar_today_rounded,
-                                    size: 18, color: AppColors.accentWine),
-                                onPressed: () async {
-                                  final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: _selectedOccurrenceDate ?? widget.weekMonday,
-                                    firstDate: widget.weekMonday,
-                                    lastDate: widget.weekSunday,
-                                  );
-                                  if (picked != null) {
-                                    setState(() {
-                                      _selectedOccurrenceDate = picked;
-                                    });
-                                  }
-                                },
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Anniversary (${DateFormat('d MMMM').format(_selectedWeddingDate!)}) is outside the current bulletin week (${DateFormat('d MMM').format(widget.weekMonday)} – ${DateFormat('d MMM').format(widget.weekSunday)}).",
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.errorRed,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
+
+                      if (isAlreadyAdded) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.errorRed.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppColors.errorRed.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                size: 18,
+                                color: AppColors.errorRed,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Anniversary for ${_coupleNameController.text.trim()} is already added for this week.',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.errorRed,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-              ],
+              ),
 
-              const Divider(height: 24),
+              const Divider(height: 20),
 
               // Actions
               Row(
@@ -1513,31 +1894,35 @@ class _AddAnniversaryDialogState extends State<_AddAnniversaryDialog> {
                       backgroundColor: AppColors.accentWine,
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: _selectedMember == null || isAlreadyAdded
-                        ? null
-                        : () {
-                            final m = _selectedMember!;
-                            final eventDate =
-                                _selectedOccurrenceDate ?? widget.weekMonday;
-                            final weddingDate =
-                                m.weddingAnniversary ?? DateTime(2015, 1, 1);
-                            final coupleName =
-                                _coupleNameController.text.trim().isNotEmpty
-                                    ? _coupleNameController.text.trim()
-                                    : '${m.fullName} & Spouse';
-
+                    onPressed: canSave
+                        ? () {
                             final entry = AnniversaryEntry(
-                              id: 'anniv_${m.uid}_${eventDate.millisecondsSinceEpoch}',
-                              memberUid: m.uid,
-                              spouseUid: m.spouseUid,
-                              coupleName: coupleName,
-                              eventDate: eventDate,
-                              weddingAnniversary: weddingDate,
-                              place: m.place ?? m.familyInfo,
-                              profileImageUrl: m.profileImageUrl,
+                              id: 'anniv_${DateTime.now().millisecondsSinceEpoch}_${_coupleNameController.text.hashCode.abs()}',
+                              memberUid: _selectedMemberUid,
+                              spouseUid: _selectedSpouseUid,
+                              coupleName: _coupleNameController.text.trim(),
+                              brideName:
+                                  _brideNameController.text.trim().isNotEmpty
+                                  ? _brideNameController.text.trim()
+                                  : null,
+                              groomName:
+                                  _groomNameController.text.trim().isNotEmpty
+                                  ? _groomNameController.text.trim()
+                                  : null,
+                              familyNumber:
+                                  _familyNumberController.text.trim().isNotEmpty
+                                  ? _familyNumberController.text.trim()
+                                  : null,
+                              eventDate: occurrence,
+                              weddingAnniversary: _selectedWeddingDate!,
+                              place: _placeController.text.trim().isNotEmpty
+                                  ? _placeController.text.trim()
+                                  : null,
+                              profileImageUrl: _profileImageUrl,
                             );
                             Navigator.pop(context, entry);
-                          },
+                          }
+                        : null,
                     child: const Text('Add Anniversary'),
                   ),
                 ],
